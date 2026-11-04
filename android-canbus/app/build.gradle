@@ -1,0 +1,45 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Setiap binaan di GitHub Actions dapat nombor versi baru supaya boleh install atas versi lama
+def buildNumber = (System.getenv('VERSION_CODE') ?: '1').toInteger()
+
+android {
+    namespace 'com.aboy.canbus'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.aboy.canbus'
+        minSdk 26
+        targetSdk 34
+        versionCode buildNumber
+        versionName "1.0.${buildNumber}"
+    }
+
+    // Kunci tandatangan dibekalkan oleh GitHub Actions (tidak disimpan dalam repo)
+    signingConfigs {
+        release {
+            storeFile file(System.getenv('KEYSTORE_FILE') ?: 'missing.jks')
+            storePassword System.getenv('KEYSTORE_PASSWORD')
+            keyAlias System.getenv('KEY_ALIAS') ?: 'aboy'
+            keyPassword System.getenv('KEYSTORE_PASSWORD')
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'androidx.webkit:webkit:1.12.1'
+}

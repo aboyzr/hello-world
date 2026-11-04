@@ -1,0 +1,185 @@
+package com.aboy.canbus;
+
+import android.app.Activity;
+import android.content.ActivityNotFoundException;
+import android.content.ContentValues;
+import android.content.Intent;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.Environment;
+import android.provider.MediaStore;
+import android.util.Base64;
+import android.view.WindowManager;
+import android.webkit.JavascriptInterface;
+import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import android.widget.Toast;
+
+import androidx.webkit.WebViewAssetLoader;
+
+import java.io.OutputStream;
+
+/**
+ * Aboy Canbus: membungkus aplikasi web (assets/canbus) dan jambatan Bluetooth ELM327.
+ * Profil kereta & label ID disimpan dalam app ini (localStorage WebView).
+ */
+public class MainActivity extends Activity {
+    private static final String HOST = "appassets.androidplatform.net";
+    private static final String HOME = "https://" + HOST + "/assets/canbus/index.html";
+    private static final int REQ_FILE = 1;
+
+    private WebView web;
+    private ObdBluetooth obd;
+    private ValueCallback<Uri[]> fileCallback;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        web = new WebView(this);
+        setContentView(web);
+
+        WebSettings s = web.getSettings();
+        s.setJavaScriptEnabled(true);
+        s.setDomStorageEnabled(true);
+        s.setAllowFileAccess(false);
+        s.setAllowContentAccess(true);
+        s.setTextZoom(100);
+
+        final WebViewAssetLoader loader = new WebViewAssetLoader.Builder()
+                .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
+                .build();
+
+        web.setWebViewClient(new WebViewClient() {
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                return loader.shouldInterceptRequest(request.getUrl());
+            }
+
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                Uri uri = request.getUrl();
+                if (HOST.equals(uri.getHost())) return false;
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW, uri));
+                } catch (ActivityNotFoundException e) {
+                    toast("Tiada app untuk buka link ini");
+                }
+                return true;
+            }
+        });
+
+        // Pilih fail .dbc untuk import
+        web.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
+                if (fileCallback != null) fileCallback.onReceiveValue(null);
+                fileCallback = callback;
+                Intent pick = new Intent(Intent.ACTION_GET_CONTENT);
+                pick.addCategory(Intent.CATEGORY_OPENABLE);
+                pick.setType("*/*");
+                try {
+                    startActivityForResult(Intent.createChooser(pick, "Pilih fail DBC"), REQ_FILE);
+                } catch (ActivityNotFoundException e) {
+                    fileCallback = null;
+                    toast("Tiada app untuk pilih fail");
+                    return false;
+                }
+                return true;
+            }
+        });
+
+        web.addJavascriptInterface(new Bridge(), "AndroidBridge");
+        obd = new ObdBluetooth(this, web);
+        web.addJavascriptInterface(obd, "ObdBridge");
+
+        if (savedInstanceState != null) web.restoreState(savedInstanceState);
+        else web.loadUrl(HOME);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != REQ_FILE || fileCallback == null) return;
+        Uri[] result = null;
+        if (resultCode == RESULT_OK && data != null && data.getData() != null) result = new Uri[]{data.getData()};
+        fileCallback.onReceiveValue(result);
+        fileCallback = null;
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == ObdBluetooth.REQ_PERM) obd.onPermissionResult(grantResults);
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        web.saveState(outState);
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (obd != null) obd.shutdown();
+        super.onDestroy();
+    }
+
+    @Override
+    @SuppressWarnings("deprecation")
+    public void onBackPressed() {
+        web.evaluateJavascript("window.nativeBack ? nativeBack() : false", value -> {
+            if (!"true".equals(value)) MainActivity.super.onBackPressed();
+        });
+    }
+
+    private void toast(String msg) {
+        runOnUiThread(() -> Toast.makeText(this, msg, Toast.LENGTH_LONG).show());
+    }
+
+    /** Fungsi yang boleh dipanggil dari JavaScript: window.AndroidBridge.* */
+    private class Bridge {
+        /** Simpan fail (CSV log / DBC) ke folder Download/Aboy Canbus */
+        @JavascriptInterface
+        public void saveFile(String name, String mime, String base64) {
+            byte[] bytes = Base64.decode(base64, Base64.DEFAULT);
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+                toast("Simpan fail perlukan Android 10 ke atas");
+                return;
+            }
+            try {
+                ContentValues v = new ContentValues();
+                v.put(MediaStore.MediaColumns.DISPLAY_NAME, name);
+                v.put(MediaStore.MediaColumns.MIME_TYPE, mime);
+                v.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Aboy Canbus");
+                Uri uri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
+                if (uri == null) throw new Exception("tiada ruang");
+                try (OutputStream out = getContentResolver().openOutputStream(uri)) {
+                    out.write(bytes);
+                }
+                toast("Disimpan: Download/Aboy Canbus/" + name);
+            } catch (Exception e) {
+                toast("Gagal simpan: " + e.getMessage());
+            }
+        }
+
+        /** Skrin kekal hidup semasa merakam */
+        @JavascriptInterface
+        public void keepScreenOn(boolean on) {
+            runOnUiThread(() -> {
+                if (on) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            });
+        }
+
+        @JavascriptInterface
+        public void toast(String msg) {
+            MainActivity.this.toast(msg);
+        }
+    }
+}

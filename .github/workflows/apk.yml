@@ -2,8 +2,8 @@ name: Bina APK Android
 
 on:
   push:
-    branches: [master, ccr-e10f1478-9pxy5o]
-    paths: ['kedai/**', 'obd/**', 'android/**', '.github/workflows/apk.yml']
+    branches: [master, ccr-682a6584-njfqtx]
+    paths: ['kedai/**', 'android/**', '.github/workflows/apk.yml']
   workflow_dispatch:
 
 permissions:
@@ -25,8 +25,6 @@ jobs:
           rm -rf android/app/src/main/assets
           mkdir -p android/app/src/main/assets
           cp -r kedai android/app/src/main/assets/kedai
-          mkdir -p android/app/src/main/assets/obd
-          cp obd/*.html obd/*.js obd/*.css obd/*.svg android/app/src/main/assets/obd/
 
       # Kunci tetap dari secret ANDROID_KEYSTORE_B64 + ANDROID_KEYSTORE_PASSWORD (jika ada),
       # supaya kemas kini boleh dipasang atas versi lama. Jika tiada, kunci sementara dibuat.

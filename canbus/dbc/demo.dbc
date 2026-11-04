@@ -1,0 +1,24 @@
+VERSION "Demo Aboy Canbus"
+
+NS_ :
+
+BS_:
+
+BU_: ECM ABS BCM
+
+BO_ 809 ENGINE_TEMP: 8 ECM
+ SG_ COOLANT_TEMP : 8|8@1+ (0.75,-48) [-48|143] "degC" Vector__XXX
+
+BO_ 1200 WHEEL_SPEEDS: 8 ABS
+ SG_ WHEEL_FL : 7|16@0+ (0.01,0) [0|655] "km/j" Vector__XXX
+ SG_ WHEEL_FR : 23|16@0+ (0.01,0) [0|655] "km/j" Vector__XXX
+ SG_ WHEEL_RL : 39|16@0+ (0.01,0) [0|655] "km/j" Vector__XXX
+ SG_ WHEEL_RR : 55|16@0+ (0.01,0) [0|655] "km/j" Vector__XXX
+
+BO_ 688 STEERING: 5 ABS
+ SG_ STEER_ANGLE : 0|16@1- (0.1,0) [-780|780] "deg" Vector__XXX
+ SG_ COUNTER : 36|4@1+ (1,0) [0|15] "" Vector__XXX
+
+CM_ BO_ 809 "Suhu enjin (demo)";
+CM_ BO_ 1200 "Kelajuan 4 roda (demo)";
+CM_ BO_ 688 "Sudut stereng (demo)";

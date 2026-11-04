@@ -1,4 +1,4 @@
-package com.aboy.workshop;
+package com.aboy.canbus;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
@@ -112,7 +112,7 @@ public class ObdBluetooth {
         afterPermission = null;
         js("onPermission", ok ? "1" : "");
         if (ok && r != null) io.execute(r);
-        else if (!ok) js("onError", "Kebenaran Bluetooth ditolak. Benarkan di Tetapan > Apps > Aboy Workshop.");
+        else if (!ok) js("onError", "Kebenaran Bluetooth ditolak. Benarkan di Tetapan > Apps > Aboy Canbus.");
     }
 
     private boolean checkAdapter() {
@@ -207,10 +207,11 @@ public class ObdBluetooth {
                 return;
             }
         }
+        final BluetoothSocket sock = s;
         try {
-            socket = s;
-            out = s.getOutputStream();
-            InputStream in = s.getInputStream();
+            socket = sock;
+            out = sock.getOutputStream();
+            InputStream in = sock.getInputStream();
             connected = true;
             js("onConnect", null);
             Thread reader = new Thread(() -> {
@@ -219,7 +220,7 @@ public class ObdBluetooth {
                     int n;
                     while ((n = in.read(buf)) > 0) js("onData", new String(buf, 0, n, StandardCharsets.ISO_8859_1));
                 } catch (Exception ignored) { }
-                if (connected && socket == s) { connected = false; js("onClose", null); }
+                if (connected && socket == sock) { connected = false; js("onClose", null); }
             }, "obd-reader");
             reader.setDaemon(true);
             reader.start();

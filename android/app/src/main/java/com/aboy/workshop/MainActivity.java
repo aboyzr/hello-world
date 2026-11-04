@@ -35,7 +35,7 @@ import java.io.FileOutputStream;
 import java.io.OutputStream;
 
 /**
- * Membungkus aplikasi web Akaun Kedai (assets/kedai) dan Diagnostik OBD2 (assets/obd) supaya boleh dipasang sebagai APK.
+ * Membungkus aplikasi web Akaun Kedai (assets/kedai) supaya boleh dipasang sebagai APK.
  * Semua data disimpan dalam app ini (IndexedDB WebView).
  */
 public class MainActivity extends Activity {
@@ -45,7 +45,6 @@ public class MainActivity extends Activity {
     private static final int REQ_CONTACT = 2;
 
     private WebView web;
-    private ObdBluetooth obd;
     private ValueCallback<Uri[]> fileCallback;
     private Uri cameraUri;
 
@@ -127,8 +126,6 @@ public class MainActivity extends Activity {
         });
 
         web.addJavascriptInterface(new Bridge(), "AndroidBridge");
-        obd = new ObdBluetooth(this, web);
-        web.addJavascriptInterface(obd, "ObdBridge");
 
         if (savedInstanceState != null) web.restoreState(savedInstanceState);
         else web.loadUrl(HOME);
@@ -152,18 +149,6 @@ public class MainActivity extends Activity {
         }
         fileCallback.onReceiveValue(result);
         fileCallback = null;
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == ObdBluetooth.REQ_PERM) obd.onPermissionResult(grantResults);
-    }
-
-    @Override
-    protected void onDestroy() {
-        if (obd != null) obd.shutdown();
-        super.onDestroy();
     }
 
     @Override

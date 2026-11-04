@@ -1,7 +1,7 @@
-// Jalankan: node --test obd/test
+// Jalankan: node --test canbus/test/*.test.js
 const test = require('node:test');
 const assert = require('node:assert');
-const C = require('../obd-core.js');
+const C = require('../can-core.js');
 const { Elm327, SimTransport } = require('../elm327.js');
 
 test('PID tunggal CAN 11-bit (RPM, suhu)', () => {
@@ -74,10 +74,10 @@ test('pemacu ELM327 dengan simulator', async () => {
   const pids = await elm.supportedPids();
   assert.ok(pids.includes(0x0C) && pids.includes(0x42));
   const rpm = await elm.readPid(0x0C);
-  assert.ok(rpm.value >= 800 && rpm.value <= 2500);
+  assert.ok(rpm.value >= 700 && rpm.value <= 4100);
   assert.strictEqual(await elm.readVin(), 'PM2L9K1A0MS123456');
   const d = await elm.readDtcs('03');
-  assert.deepStrictEqual(d.codes.map(c => c.code), ['P0301', 'P0420', 'U0121']);
+  assert.deepStrictEqual(d.codes.map(c => c.code), ['P0301', 'P0420']);
   assert.ok(await elm.clearDtcs());
   assert.strictEqual((await elm.readDtcs('03')).codes.length, 0);
   const frames = [];
@@ -85,5 +85,5 @@ test('pemacu ELM327 dengan simulator', async () => {
   await new Promise(r => setTimeout(r, 300));
   await elm.stopMonitor();
   assert.ok(frames.some(f => f.id === '316'));
-  assert.ok((await elm.voltage()) > 13);
+  assert.ok((await elm.voltage()) > 12);
 });

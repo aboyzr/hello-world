@@ -4,7 +4,7 @@
  */
 (function (root) {
   'use strict';
-  const Core = root.ObdCore || (typeof require !== 'undefined' ? require('./obd-core.js') : null);
+  const Core = root.ObdCore || (typeof require !== 'undefined' ? require('./can-core.js') : null);
 
   class Elm327 {
     constructor(transport, log) {
@@ -24,6 +24,7 @@
           if (!line) continue;
           if (/BUFFER FULL/i.test(line)) { this.monitor.onOverflow && this.monitor.onOverflow(); continue; }
           if (line === '>' || /^STOPPED/i.test(line)) continue;
+          if (line === '?' && this.monitor.onUnsupported) { this.monitor.onUnsupported(); continue; }
           this.monitor.onLine(line.replace(/^>/, ''));
         }
         if (this.buf.includes('>')) { const w = this.monitor.stopWaiter; this.buf = ''; if (w) w(); }
@@ -115,20 +116,24 @@
     }
 
     // Mula tangkap semua trafik bas CAN. filter = { id: '7E8', mask: '7FF' } (pilihan)
-    async startMonitor(onLine, filter, onOverflow) {
-      if (!this.protocol.can) throw new Error('Monitor CAN hanya untuk kereta protokol CAN');
+    async startMonitor(onLine, filter, onOverflow, onUnsupported) {
+      if (!this.protocol.can) throw new Error('Sniff CAN hanya untuk kereta protokol CAN');
       await this.send('ATCAF0'); // papar bait PCI (data mentah)
       if (filter && filter.id) {
         await this.send(this.protocol.ext ? 'ATCF' + filter.id.padStart(8, '0') : 'ATCF' + filter.id.padStart(3, '0'));
         await this.send(this.protocol.ext ? 'ATCM' + (filter.mask || '1FFFFFFF') : 'ATCM' + (filter.mask || '7FF'));
       } else await this.send('ATCRA');
-      this.monitor = { onLine, onOverflow };
+      this._beginMa(onLine, onOverflow, onUnsupported);
+    }
+
+    _beginMa(onLine, onOverflow, onUnsupported) {
+      this.monitor = { onLine, onOverflow, onUnsupported };
       this.buf = '';
       this.log('tx', 'ATMA');
       this.t.write('ATMA\r');
     }
 
-    async stopMonitor() {
+    async _endMa() {
       if (!this.monitor) return;
       await new Promise(res => {
         const done = () => { clearTimeout(timer); res(); };
@@ -137,8 +142,36 @@
         this.t.write('\r'); // mana-mana aksara hentikan ATMA
       });
       this.monitor = null; this.buf = '';
+    }
+
+    async stopMonitor() {
+      if (!this.monitor) return;
+      await this._endMa();
       await this.send('ATCRA').catch(() => {});
       await this.send('ATCAF1').catch(() => {});
+    }
+
+    // Tangkap trafik selama ms milisaat, kemudian kembali ke mod soal-jawab (untuk selang-seli dengan PID)
+    async burst(ms, onLine) {
+      await this.send('ATCAF0');
+      this._beginMa(onLine);
+      await new Promise(r => setTimeout(r, ms));
+      await this._endMa();
+      await this.send('ATCAF1');
+    }
+
+    // Uji sama ada dongle sokong ATMA dan ada trafik di port OBD
+    async probeSniff() {
+      if (!this.protocol.can) return { ok: false, reason: 'Kereta bukan protokol CAN' };
+      let frames = 0, unsupported = false;
+      await this.send('ATCAF0');
+      this._beginMa(l => { if (Core.parseCanFrame(l)) frames++; }, null, () => { unsupported = true; });
+      await new Promise(r => setTimeout(r, 800));
+      await this._endMa();
+      await this.send('ATCAF1').catch(() => {});
+      if (unsupported) return { ok: false, reason: 'Dongle tidak sokong mod sniff (ATMA)' };
+      if (!frames) return { ok: false, reason: 'Tiada trafik CAN di port OBD (mungkin ada gateway). Graf PID masih boleh.' };
+      return { ok: true, frames };
     }
   }
 
@@ -232,11 +265,14 @@
   }
 
   // ---------- Transport: Simulator (demo tanpa kereta) ----------
+  // Bas CAN contoh: ID & formula direka untuk demo sahaja, bukan maksud ID kereta sebenar.
   class SimTransport {
     constructor(opts) {
       this.name = 'Demo (simulator)'; this.dataFns = []; this.closeFns = [];
-      this.o = Object.assign({ dtcs: ['P0301', 'P0420', 'U0121'], vin: 'PM2L9K1A0MS123456', latency: 15 }, opts);
-      this.echo = true; this.headers = false; this.spaces = true; this.caf = true; this.t0 = Date.now(); this.mon = null; this.dtcs = this.o.dtcs.slice();
+      this.o = Object.assign({ dtcs: ['P0301', 'P0420'], vin: 'PM2L9K1A0MS123456', latency: 15 }, opts);
+      this.echo = true; this.headers = false; this.spaces = true; this.caf = true;
+      this.t0 = Date.now(); this.mon = null; this.dtcs = this.o.dtcs.slice(); this.n = 0;
+      this.brake = null; // null = automatik; true/false = dikawal app (mod Belajar tindakan)
     }
     open() { return Promise.resolve(); }
     onData(f) { this.dataFns.push(f); }
@@ -245,13 +281,23 @@
     _emit(s) { setTimeout(() => this.dataFns.forEach(f => f(s)), this.o.latency); }
     write(s) {
       if (this.mon) { this._stopMon(); this._emit('\r\r>'); return; }
-      for (const cmd of s.split('\r').map(x => x.trim().toUpperCase().replace(/\s+/g, '')).filter(Boolean)) this._emit((this.echo ? cmd + '\r' : '') + this._reply(cmd) + '\r\r>');
+      for (const cmd of s.split('\r').map(x => x.trim().toUpperCase().replace(/\s+/g, '')).filter(Boolean)) {
+        const r = this._reply(cmd);
+        if (r === null) { if (this.echo) this._emit(cmd + '\r'); continue; }
+        this._emit((this.echo ? cmd + '\r' : '') + r + '\r\r>');
+      }
     }
     _stopMon() { if (this.mon) { clearInterval(this.mon); this.mon = null; } }
     _state() {
       const t = (Date.now() - this.t0) / 1000;
-      const rpm = 800 + 1700 * (0.5 + 0.5 * Math.sin(t / 3));
-      return { t, rpm, speed: Math.max(0, Math.round(rpm / 40 - 20)), cool: Math.min(90, 40 + t * 2), thr: 12 + (rpm - 800) / 50, load: 20 + (rpm - 800) / 40 };
+      const pedal = Math.pow(Math.max(0, Math.sin(t / 1.6)), 1.5);
+      // RPM & kelajuan ikut pedal dengan lengah (macam enjin sebenar), bukan salinan tepat TPS
+      const dt = Math.min(0.5, t - (this._lt || t)); this._lt = t;
+      this._rpmF = (this._rpmF == null ? pedal : this._rpmF + (pedal - this._rpmF) * Math.min(1, dt * 2.5));
+      this._spdF = (this._spdF == null ? 0.3 : this._spdF + (pedal - this._spdF) * Math.min(1, dt * 0.35));
+      const rpm = 780 + Math.pow(this._rpmF, 0.8) * 3200 + Math.sin(t * 3) * 15;
+      const brake = this.brake === null ? (Math.sin(t / 2.3 + 2) > 0.85) : this.brake;
+      return { t, pedal, rpm, tps: 2 + pedal * 70, speed: Math.max(0, 20 + this._spdF * 60), cool: Math.min(88, 62 + t * 0.4), load: 15 + this._rpmF * 60, steer: Math.sin(t / 2) * 300, brake };
     }
     _fmt(header, bytes) {
       const b = bytes.map(x => x.toString(16).toUpperCase().padStart(2, '0'));
@@ -269,62 +315,66 @@
       return out.join('\r');
     }
     _reply(c) {
-      if (c === 'ATZ') { this.echo = true; this.headers = false; return '\r\rELM327 v1.5'; }
+      if (c === 'ATZ') { this.echo = true; this.headers = false; this.caf = true; return '\r\rELM327 v1.5'; }
       if (c === 'ATI') return 'ELM327 v1.5';
       if (c === 'ATE0') { this.echo = false; return 'OK'; }
       if (c === 'ATE1') { this.echo = true; return 'OK'; }
       if (/^ATH[01]$/.test(c)) { this.headers = c[3] === '1'; return 'OK'; }
       if (/^ATS[01]$/.test(c)) { this.spaces = c[3] === '1'; return 'OK'; }
       if (/^ATCAF[01]$/.test(c)) { this.caf = c[5] === '1'; return 'OK'; }
-      if (c === 'ATRV') return (13.6 + Math.random() * 0.4).toFixed(1) + 'V';
+      if (c === 'ATRV') return (12.4 + Math.random() * 0.3).toFixed(1) + 'V';
       if (c === 'ATDPN') return 'A6';
       if (c === 'ATDP') return 'AUTO, ISO 15765-4 (CAN 11/500)';
       if (c === 'ATMA') { this._startMon(); return null; }
       if (c.startsWith('AT')) return 'OK';
       if (!/^[0-9A-F]+$/.test(c)) return '?';
+      if (!this.caf) return 'NO DATA'; // tanpa format ISO-TP, ECU tidak faham
       const s = this._state(); const mode = c.slice(0, 2), pid = parseInt(c.slice(2, 4), 16);
+      const w16 = v => [(Math.round(v) >> 8) & 0xff, Math.round(v) & 0xff];
       if (mode === '01') {
         const sup = { 0x00: [0xBE, 0x3F, 0xA8, 0x13], 0x20: [0x90, 0x05, 0xB0, 0x15], 0x40: [0x7A, 0x1C, 0x00, 0x00] };
         const v = {
           0x01: [0x80 | this.dtcs.length, 0x07, 0xE5, 0x00], 0x04: [Math.round(s.load * 2.55)], 0x05: [Math.round(s.cool + 40)],
           0x06: [128 + Math.round(Math.sin(s.t) * 5)], 0x07: [131], 0x0B: [Math.round(30 + s.load / 2)],
-          0x0C: [(Math.round(s.rpm * 4) >> 8) & 0xff, Math.round(s.rpm * 4) & 0xff], 0x0D: [s.speed], 0x0E: [140], 0x0F: [72],
-          0x10: [((s.rpm * 0.6) >> 8) & 0xff, Math.round(s.rpm * 0.6) & 0xff], 0x11: [Math.round(s.thr * 2.55)], 0x1C: [6],
-          0x1F: [(Math.round(s.t) >> 8) & 0xff, Math.round(s.t) & 0xff], 0x21: [0, 42], 0x2F: [150], 0x31: [0x01, 0xF4], 0x33: [101],
-          0x42: [0x36, 0x6E], 0x46: [70], 0x51: [1], 0x5C: [Math.round(s.cool + 35)]
+          0x0C: w16(s.rpm * 4), 0x0D: [Math.round(s.speed)], 0x0E: [140], 0x0F: [72], 0x10: w16(s.rpm * 0.6),
+          0x11: [Math.round(s.tps * 2.55)], 0x1C: [6], 0x1F: w16(s.t), 0x21: [0, 42], 0x2F: [150], 0x31: [0x01, 0xF4],
+          0x33: [101], 0x42: [0x30, 0xD4], 0x46: [70], 0x51: [1], 0x5C: [Math.round(s.cool + 35)]
         };
         if (sup[pid]) return this._frames([0x41, pid].concat(sup[pid]));
         if (v[pid]) return this._frames([0x41, pid].concat(v[pid]));
         return 'NO DATA';
       }
       if (mode === '03' || mode === '07') {
-        const codes = mode === '03' ? this.dtcs : ['P0171'];
+        const codes = mode === '03' ? this.dtcs : [];
         const bytes = [];
-        for (const d of codes) {
-          const a = ('PCBU'.indexOf(d[0]) << 6) | (parseInt(d[1], 16) << 4) | parseInt(d[2], 16);
-          bytes.push(a, parseInt(d.slice(3), 16));
-        }
+        for (const d of codes) { bytes.push(('PCBU'.indexOf(d[0]) << 6) | (parseInt(d[1], 16) << 4) | parseInt(d[2], 16), parseInt(d.slice(3), 16)); }
         return this._frames([parseInt(mode, 16) + 0x40, codes.length].concat(bytes));
       }
       if (mode === '04') { this.dtcs = []; return this._frames([0x44]); }
       if (c === '0902') return this._frames([0x49, 0x02, 0x01].concat([...this.o.vin].map(ch => ch.charCodeAt(0))));
       return 'NO DATA';
     }
+    _busFrames() {
+      const s = this._state(), n = this.n++, out = [];
+      const rpm = Math.round(s.rpm * 4) & 0xffff;
+      const f316 = [0x05, 0x20, rpm & 0xff, rpm >> 8, 0x20, 0x20, 0x00];
+      f316.push(f316.reduce((a, b) => a + b, 0x316 & 0xff) & 0xff); // checksum
+      out.push(['316', f316]);
+      out.push(['320', [0x00, 0x1F, Math.round(s.tps * 2.55), 0x00, 0x40, 0x00, 0x00, n & 0xff]]);
+      const ws = Math.round(s.speed * 100);
+      const wheel = k => ws + k * 3;
+      out.push(['4B0', [0, 1, 2, 3].flatMap(k => [(wheel(k) >> 8) & 0xff, wheel(k) & 0xff])]);
+      if (n % 2 === 0) { const ang = Math.round(s.steer * 10) & 0xffff; out.push(['2B0', [ang & 0xff, ang >> 8, 0x00, 0x07, ((n >> 1) & 0xf) << 4]]); }
+      if (n % 5 === 0) out.push(['329', [0x40, Math.round((s.cool + 48) / 0.75), 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]]);
+      if (n % 4 === 0) out.push(['3B7', [s.brake ? 0x20 : 0x00, 0x00, 0x00, 0x00]]);
+      if (n % 20 === 0) out.push(['545', [0xD8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]]);
+      return out;
+    }
     _startMon() {
-      // Trafik bas CAN palsu: RPM (0x316), kelajuan roda (0x4B0), suhu (0x329), stereng (0x2B0)
-      let n = 0;
       this.mon = setInterval(() => {
-        const s = this._state(); const lines = [];
-        const rpm = Math.round(s.rpm * 4);
-        lines.push(this._fmt('316', [0x05, 0x20, rpm & 0xff, rpm >> 8, 0x20, 0x20, 0x00, 0x80]));
-        const ws = Math.round(s.speed * 100);
-        lines.push(this._fmt('4B0', [ws >> 8, ws & 0xff, ws >> 8, ws & 0xff, ws >> 8, ws & 0xff, ws >> 8, ws & 0xff]));
-        if (n % 5 === 0) lines.push(this._fmt('329', [0x40, Math.round(s.cool * 4 / 3 + 64), 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]));
-        if (n % 2 === 0) { const ang = (Math.round(Math.sin(s.t / 2) * 3000) + 65536) & 0xffff; lines.push(this._fmt('2B0', [ang & 0xff, ang >> 8, 0x00, 0x07, (n & 0xf) << 4])); }
-        if (n % 10 === 0) lines.push(this._fmt('545', [0xD8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]));
-        n++;
+        const lines = this._busFrames().map(([id, b]) => this._fmt(id, b));
         this.dataFns.forEach(f => f(lines.join('\r') + '\r'));
-      }, 50);
+      }, 20);
     }
   }
 

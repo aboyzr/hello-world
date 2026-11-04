@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0d1218">
+  <title>Aboy Canbus</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header class="top">
+    <h1>Aboy Canbus</h1>
+    <span class="pill" id="pill">Belum bersambung</span>
+  </header>
+  <p class="status" id="status" hidden></p>
+
+  <main>
+    <!-- ============ GRAF ============ -->
+    <section class="view" id="view-graf" hidden>
+      <div class="bar">
+        <button class="btn primary" id="btnGraf">▶ Mula</button>
+        <button class="btn" id="btnPickSig">＋ Pilih sensor</button>
+        <span class="sub" id="grafRate"></span>
+      </div>
+      <div id="charts"></div>
+      <p class="empty" id="grafEmpty">Pilih sensor untuk dipapar. Sensor CAN datang dari tab <b>Belajar</b>, fail DBC atau label anda sendiri. PID standard juga boleh dipilih.</p>
+    </section>
+
+    <!-- ============ SNIFF ============ -->
+    <section class="view" id="view-sniff" hidden>
+      <div class="bar">
+        <button class="btn primary" id="btnSniff">▶ Tangkap</button>
+        <button class="btn" id="btnRec">● Rakam</button>
+        <button class="btn" id="btnCsv" disabled>Eksport CSV</button>
+      </div>
+      <div class="bar">
+        <label class="field inline" for="filtId">Tapis ID<input id="filtId" placeholder="kosong = semua" maxlength="8" autocapitalize="characters"></label>
+        <label class="field inline" for="filtMask">Mask<input id="filtMask" placeholder="7FF" maxlength="8" autocapitalize="characters"></label>
+      </div>
+      <p class="sub" id="sniffStats">Tangkap semua bingkai di bas CAN. Bait yang berubah diwarnakan. Tekan satu ID untuk namakan.</p>
+      <div class="sniff" id="sniffTable"></div>
+      <p class="legend sub"><i class="r-counter"></i>counter <i class="r-checksum"></i>checksum <i class="r-analog"></i>analog <i class="r-bit"></i>bit/suis <i class="r-tetap"></i>tetap</p>
+    </section>
+
+    <!-- ============ KENAL ID ============ -->
+    <section class="view" id="view-ids" hidden>
+      <div class="bar">
+        <label class="field inline" for="profileSel">Profil kereta<select id="profileSel"></select></label>
+        <button class="btn" id="btnNewProfile">＋ Profil</button>
+      </div>
+      <div class="bar">
+        <label class="btn" for="dbcFile">Import DBC</label>
+        <input type="file" id="dbcFile" accept=".dbc,text/plain" hidden>
+        <button class="btn" id="btnExportDbc">Eksport DBC</button>
+        <button class="btn" id="btnDemoDbc" hidden>DBC demo</button>
+      </div>
+      <p class="sub" id="idsStats">ID yang dikesan semasa Sniff / Graf / Belajar disenaraikan di sini.</p>
+      <div id="idList"></div>
+    </section>
+
+    <!-- ============ BELAJAR ============ -->
+    <section class="view" id="view-learn" hidden>
+      <section class="card">
+        <h2>Banding dengan PID standard</h2>
+        <p class="sub">App baca sensor melalui PID standard, dan berselang-seli rakam semua bingkai CAN. Bait yang bergerak sama dengan sensor itu disenaraikan.</p>
+        <label class="field" for="learnPid">Sensor rujukan<select id="learnPid"></select></label>
+        <p class="hint" id="learnHint"></p>
+        <div class="bar">
+          <button class="btn primary" id="btnLearn">▶ Mula belajar</button>
+          <span class="sub" id="learnInfo"></span>
+        </div>
+        <div class="big-ref" id="learnRef" hidden></div>
+        <div id="learnResults"></div>
+      </section>
+
+      <section class="card">
+        <h2>Belajar dari tindakan</h2>
+        <p class="sub">Untuk suis yang tiada PID: brek, pintu, lampu, signal, hon. Mula tangkap, kemudian tekan <b>Saya sedang buat</b> setiap kali anda buat tindakan itu, dan <b>Berhenti</b> bila lepas. Ulang 3 kali.</p>
+        <label class="field" for="actName">Nama tindakan<input id="actName" placeholder="cth Pedal brek ditekan" value="Pedal brek ditekan"></label>
+        <div class="bar">
+          <button class="btn primary" id="btnAct">▶ Mula tangkap</button>
+          <button class="btn big-toggle" id="btnActOn" disabled>Saya sedang buat</button>
+        </div>
+        <p class="sub" id="actInfo"></p>
+        <div id="actResults"></div>
+      </section>
+    </section>
+
+    <!-- ============ SAMBUNG ============ -->
+    <section class="view" id="view-conn">
+      <section class="card">
+        <h2>Sambung dongle ELM327</h2>
+        <ol class="steps sub">
+          <li>Cucuk dongle ke port OBD2 (bawah stereng). Kunci <b>ON</b> atau hidupkan enjin.</li>
+          <li>Dongle <b>Bluetooth biasa</b>: pair dulu di Tetapan Bluetooth telefon (PIN biasanya <b>1234</b> atau <b>0000</b>), kemudian tekan <b>Senarai dongle</b>.</li>
+          <li>Dongle <b>BLE</b>: tak perlu pair, tekan <b>Cari BLE</b>.</li>
+        </ol>
+        <div class="bar">
+          <button class="btn primary" id="btnList">Senarai dongle</button>
+          <button class="btn" id="btnScanBle">Cari BLE</button>
+          <button class="btn" id="btnDemo">Demo</button>
+        </div>
+        <div class="bar" id="webBtns" hidden>
+          <button class="btn" id="btnWebBle">Web Bluetooth (BLE)</button>
+          <button class="btn" id="btnSerial">Port Serial / COM</button>
+        </div>
+        <ul class="list" id="devList"></ul>
+        <label class="field" for="protoSel">Protokol
+          <select id="protoSel">
+            <option value="0">Auto (disyorkan)</option>
+            <option value="6">CAN 11-bit 500k (kebanyakan kereta 2008+)</option>
+            <option value="7">CAN 29-bit 500k</option>
+            <option value="8">CAN 11-bit 250k</option>
+            <option value="9">CAN 29-bit 250k (lori J1939)</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="card" id="infoCard" hidden>
+        <h2>Ujian dongle &amp; kereta</h2>
+        <dl class="kv" id="infoList"></dl>
+        <button class="btn danger" id="btnDisconnect">Putus sambungan</button>
+      </section>
+
+      <details class="card">
+        <summary>Terminal (arahan AT / OBD)</summary>
+        <form class="bar" id="termForm">
+          <input id="termIn" placeholder="cth ATDP, 010C" autocapitalize="characters" autocomplete="off" aria-label="Arahan">
+          <button class="btn primary">Hantar</button>
+        </form>
+        <pre class="term" id="termOut"></pre>
+      </details>
+    </section>
+  </main>
+
+  <nav class="tabbar" aria-label="Menu">
+    <button data-tab="graf"><svg viewBox="0 0 24 24"><path d="M3 20h18M4 16l4-6 4 3 4-8 4 5"/></svg>Graf</button>
+    <button data-tab="sniff"><svg viewBox="0 0 24 24"><path d="M3 12h3l2-6 4 12 2-6h7"/></svg>Sniff</button>
+    <button data-tab="ids"><svg viewBox="0 0 24 24"><path d="M4 4h7l9 9-7 7-9-9zM8 8h.01"/></svg>Kenal ID</button>
+    <button data-tab="learn"><svg viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0-4 10.5V17h8v-3.5A6 6 0 0 0 12 3zM9 21h6"/></svg>Belajar</button>
+    <button class="on" data-tab="conn"><svg viewBox="0 0 24 24"><path d="m7 7 10 10-5 5V2l5 5L7 17"/></svg>Sambung</button>
+  </nav>
+
+  <dialog id="sigDlg">
+    <form method="dialog" class="dlg">
+      <h2>Pilih sensor untuk graf</h2>
+      <p class="sub">Maksimum 4. Isyarat CAN perlukan sniff; PID dibaca dengan soal-jawab.</p>
+      <div class="pick" id="sigPick"></div>
+      <div class="bar end"><button class="btn primary" value="ok">Siap</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="idDlg">
+    <form method="dialog" class="dlg" id="idForm">
+      <h2 id="idDlgTitle">ID</h2>
+      <p class="mono sub" id="idDlgRaw"></p>
+      <label class="field" for="idName">Nama / fungsi ID<input id="idName" name="name" placeholder="cth Data enjin"></label>
+      <h3 class="sec">Isyarat dalam ID ini</h3>
+      <ul class="list" id="idSigs"></ul>
+      <details class="add-sig">
+        <summary>＋ Tambah isyarat manual</summary>
+        <div class="two">
+          <label class="field" for="sgName">Nama<input id="sgName" placeholder="cth TPS"></label>
+          <label class="field" for="sgUnit">Unit<input id="sgUnit" placeholder="%"></label>
+        </div>
+        <div class="two">
+          <label class="field" for="sgStart">Bit mula<input id="sgStart" type="number" min="0" max="63" value="16"></label>
+          <label class="field" for="sgLen">Panjang (bit)<input id="sgLen" type="number" min="1" max="32" value="8"></label>
+        </div>
+        <div class="two">
+          <label class="field" for="sgOrder">Susunan bait<select id="sgOrder"><option value="intel">Intel (little endian)</option><option value="motorola">Motorola (big endian)</option></select></label>
+          <label class="field" for="sgSigned">Bertanda<select id="sgSigned"><option value="">Tidak</option><option value="1">Ya</option></select></label>
+        </div>
+        <div class="two">
+          <label class="field" for="sgScale">Skala<input id="sgScale" type="number" step="any" value="1"></label>
+          <label class="field" for="sgOffset">Ofset<input id="sgOffset" type="number" step="any" value="0"></label>
+        </div>
+        <p class="sub">Nilai = mentah × skala + ofset. Intel: bit mula = LSB. Motorola: bit mula = MSB (penomboran DBC). Bait 2 penuh = bit mula 16, panjang 8.</p>
+        <button class="btn" type="button" id="btnAddSig">Tambah isyarat</button>
+      </details>
+      <div class="bar end">
+        <button class="btn danger" type="button" id="btnDelLabel">Padam label</button>
+        <button class="btn" type="button" onclick="this.closest('dialog').close('cancel')">Tutup</button>
+        <button class="btn primary" value="ok">Simpan</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="askDlg">
+    <form method="dialog" class="dlg">
+      <h2 id="askTitle"></h2>
+      <p class="sub" id="askText"></p>
+      <input id="askInput" hidden aria-label="Jawapan">
+      <div class="bar end"><button class="btn" type="button" onclick="this.closest('dialog').close('no')">Batal</button><button class="btn primary" value="yes" id="askOk">OK</button></div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="can-core.js"></script>
+  <script src="analyze.js"></script>
+  <script src="dbc.js"></script>
+  <script src="elm327.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
