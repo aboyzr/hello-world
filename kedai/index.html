@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1016">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>Akaun Kedai</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header class="top">
+    <h1 id="shopTitle">Kedai Saya</h1>
+    <p class="sub" id="todayLabel"></p>
+  </header>
+
+  <main>
+    <!-- ============ UTAMA ============ -->
+    <section class="view" id="view-home">
+      <div class="quick">
+        <button class="qbtn in" data-new="sale"><b>＋ Resit Pelanggan</b><span>Duit masuk</span></button>
+        <button class="qbtn out" data-new="buy"><b>＋ Resit Pembelian</b><span>Duit keluar</span></button>
+      </div>
+
+      <nav class="month" aria-label="Pilih bulan">
+        <button class="icon-btn" id="prevMonth" aria-label="Bulan sebelum">‹</button>
+        <strong id="monthLabel"></strong>
+        <button class="icon-btn" id="nextMonth" aria-label="Bulan seterusnya">›</button>
+      </nav>
+
+      <div class="grid">
+        <section class="card wide">
+          <h2>Untung bersih</h2>
+          <p class="hero-num" id="profit">RM0.00</p>
+          <p class="sub" id="profitSub"></p>
+        </section>
+        <section class="card">
+          <h2><i class="dot in"></i>Jualan</h2>
+          <p class="big" id="totSales">RM0.00</p>
+          <p class="sub" id="cntSales"></p>
+        </section>
+        <section class="card">
+          <h2><i class="dot out"></i>Pembelian</h2>
+          <p class="big" id="totBuys">RM0.00</p>
+          <p class="sub" id="cntBuys"></p>
+        </section>
+        <button class="card wide debt-card" id="debtCard">
+          <h2>Hutang pelanggan belum bayar</h2>
+          <p class="big" id="totDebt">RM0.00</p>
+          <p class="sub" id="cntDebt"></p>
+        </button>
+        <section class="card wide">
+          <h2>Hari ini</h2>
+          <div class="today-row">
+            <div><span class="sub">Jualan</span><b id="dayIn">RM0.00</b></div>
+            <div><span class="sub">Pembelian</span><b id="dayOut">RM0.00</b></div>
+            <div><span class="sub">Untung</span><b id="dayNet">RM0.00</b></div>
+          </div>
+        </section>
+        <section class="card wide">
+          <h2>Pembelian ikut kategori</h2>
+          <ul class="bars" id="bars"></ul>
+        </section>
+        <section class="card wide">
+          <h2>Rekod terkini</h2>
+          <div id="recent"></div>
+        </section>
+      </div>
+    </section>
+
+    <!-- ============ JUALAN ============ -->
+    <section class="view" id="view-sales" hidden>
+      <div class="list-head">
+        <input type="search" id="salesSearch" placeholder="Cari no. resit, nama, no. plat…" aria-label="Cari jualan">
+        <div class="seg" role="group">
+          <button class="on" data-sfilter="all">Semua</button>
+          <button data-sfilter="debt">Hutang</button>
+        </div>
+      </div>
+      <div id="salesList"></div>
+    </section>
+
+    <!-- ============ PEMBELIAN ============ -->
+    <section class="view" id="view-buys" hidden>
+      <div class="list-head">
+        <input type="search" id="buysSearch" placeholder="Cari pembekal, barang…" aria-label="Cari pembelian">
+      </div>
+      <div id="buysList"></div>
+    </section>
+
+    <!-- ============ TETAPAN ============ -->
+    <section class="view" id="view-set" hidden>
+      <form class="card" id="setForm">
+        <h2>Maklumat kedai (untuk resit)</h2>
+        <label class="field">Nama kedai <input id="sName" required maxlength="60"></label>
+        <label class="field">Alamat <textarea id="sAddr" rows="2" maxlength="200"></textarea></label>
+        <div class="two">
+          <label class="field">No. telefon <input id="sPhone" inputmode="tel" maxlength="30"></label>
+          <label class="field">No. SSM <input id="sSsm" maxlength="40"></label>
+        </div>
+        <label class="field">Nota bawah resit <input id="sFooter" maxlength="120" placeholder="Terima kasih! Waranti servis 1 bulan."></label>
+        <div class="two">
+          <label class="field">Awalan no. resit <input id="sPrefix" maxlength="6"></label>
+          <label class="field">No. resit seterusnya <input id="sNext" inputmode="numeric" maxlength="7"></label>
+        </div>
+        <button class="primary" type="submit">Simpan tetapan</button>
+        <p class="sub saved" id="savedMsg" hidden>✓ Disimpan</p>
+      </form>
+
+      <section class="card">
+        <h2>Backup &amp; eksport</h2>
+        <p class="sub note">Semua data disimpan dalam telefon ini sahaja. Buat backup selalu (contoh: hantar ke WhatsApp sendiri atau Google Drive) supaya tak hilang kalau telefon rosak atau tukar telefon.</p>
+        <div class="tools">
+          <button class="ghost" id="backupBtn">Simpan backup</button>
+          <label class="ghost" for="restoreFile">Pulih backup</label>
+          <input type="file" id="restoreFile" accept="application/json,.json" hidden>
+          <button class="ghost" id="csvBtn">Eksport CSV bulan ini (Excel)</button>
+        </div>
+        <p class="sub" id="storageInfo"></p>
+      </section>
+    </section>
+  </main>
+
+  <button class="fab" id="fab" hidden aria-label="Tambah">＋</button>
+
+  <nav class="tabbar" aria-label="Menu">
+    <button class="on" data-tab="home"><svg viewBox="0 0 24 24"><path d="M3 11 12 3l9 8v10h-6v-6H9v6H3z"/></svg>Utama</button>
+    <button data-tab="sales"><svg viewBox="0 0 24 24"><path d="M5 2h14v20l-3-2-2 2-2-2-2 2-2-2-3 2zM8 7h8M8 11h8M8 15h5"/></svg>Jualan</button>
+    <button data-tab="buys"><svg viewBox="0 0 24 24"><path d="M3 4h2l2.5 11h11L21 7H6.5M9 20a1 1 0 1 0 0-.1M18 20a1 1 0 1 0 0-.1"/></svg>Pembelian</button>
+    <button data-tab="set"><svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19 12l2-1-1-3-2 .3-1.5-1.5L17 5l-3-1-1 2h-2L10 4 7 5l.5 1.8L6 8.3 4 8l-1 3 2 1v0l-2 1 1 3 2-.3 1.5 1.5L7 19l3 1 1-2h2l1 2 3-1-.5-1.8 1.5-1.5 2 .3 1-3z"/></svg>Tetapan</button>
+  </nav>
+
+  <!-- ============ BORANG RESIT PELANGGAN ============ -->
+  <dialog class="full" id="saleDlg">
+    <form id="saleForm">
+      <div class="dlg-head">
+        <button type="button" class="icon-btn" data-close aria-label="Tutup">✕</button>
+        <h3 id="saleTitle">Resit Pelanggan Baru</h3>
+      </div>
+      <div class="dlg-body">
+        <div class="two">
+          <label class="field">No. plat <input id="fPlate" list="dlPlates" autocomplete="off" maxlength="20" placeholder="WXY 1234"></label>
+          <label class="field">Kenderaan <input id="fVehicle" list="dlVehicles" autocomplete="off" maxlength="40" placeholder="Myvi 1.5"></label>
+        </div>
+        <div class="two">
+          <label class="field">Nama pelanggan <input id="fCust" list="dlCusts" autocomplete="off" maxlength="60"></label>
+          <label class="field">No. telefon <input id="fPhone" inputmode="tel" autocomplete="off" maxlength="20" placeholder="012-3456789"></label>
+        </div>
+
+        <p class="label">Item / kerja <span class="sub">· kuantiti × harga seunit (RM)</span></p>
+        <div id="items"></div>
+        <button type="button" class="ghost add-item" id="addItem">＋ Tambah item</button>
+
+        <div class="two">
+          <label class="field">Diskaun (RM) <input id="fDisc" inputmode="decimal" placeholder="0.00" autocomplete="off"></label>
+          <label class="field">Tarikh <input type="date" id="fDate" required></label>
+        </div>
+        <p class="label">Cara bayar</p>
+        <div class="chips" id="fPay"></div>
+        <label class="field">Catatan <input id="fNote" maxlength="160" placeholder="cth: Servis seterusnya 5,000 km"></label>
+      </div>
+      <div class="dlg-foot">
+        <div class="total-line"><span>Jumlah</span><b id="fTotal">RM0.00</b></div>
+        <button type="submit" class="primary in">Simpan &amp; buat resit</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ============ PAPAR RESIT ============ -->
+  <dialog class="full" id="rcptDlg">
+    <div class="dlg-head">
+      <button type="button" class="icon-btn" data-close aria-label="Tutup">✕</button>
+      <h3 id="rcptTitle">Resit</h3>
+    </div>
+    <div class="dlg-body rcpt-body">
+      <img id="rcptImg" alt="Resit">
+    </div>
+    <div class="dlg-foot">
+      <div class="act-grid">
+        <button class="primary wa" id="rShare">WhatsApp (gambar)</button>
+        <button class="ghost" id="rWaText">WhatsApp (teks)</button>
+        <button class="ghost" id="rPrint">Cetak</button>
+        <button class="ghost" id="rPdf">Simpan PDF</button>
+      </div>
+      <div class="act-row">
+        <button class="ghost" id="rPaid">Tanda sudah bayar</button>
+        <button class="ghost" id="rEdit">Ubah</button>
+        <button class="ghost danger" id="rDel">Padam</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- ============ BORANG RESIT PEMBELIAN ============ -->
+  <dialog class="full" id="buyDlg">
+    <form id="buyForm">
+      <div class="dlg-head">
+        <button type="button" class="icon-btn" data-close aria-label="Tutup">✕</button>
+        <h3 id="buyTitle">Resit Pembelian Baru</h3>
+      </div>
+      <div class="dlg-body">
+        <label class="photo" id="photoBox">
+          <input type="file" id="bPhoto" accept="image/*" capture="environment" hidden>
+          <img id="bPhotoPrev" alt="" hidden>
+          <span id="bPhotoHint">📷 Ambil gambar resit (pilihan)</span>
+        </label>
+        <button type="button" class="link" id="bPhotoDel" hidden>Buang gambar</button>
+        <label class="amount">
+          <span>RM</span>
+          <input id="bAmt" inputmode="decimal" placeholder="0.00" required autocomplete="off">
+        </label>
+        <p class="label">Kategori</p>
+        <div class="chips" id="bCats"></div>
+        <label class="field">Pembekal / kedai <input id="bSupp" list="dlSupps" autocomplete="off" maxlength="60" placeholder="cth: Kedai Spare Part Ah Seng"></label>
+        <label class="field">Barang / keterangan <input id="bDesc" maxlength="160" autocomplete="off" placeholder="cth: Minyak hitam 4L x 6, brake pad"></label>
+        <div class="two">
+          <label class="field">Tarikh <input type="date" id="bDate" required></label>
+          <label class="field">Cara bayar
+            <select id="bPay"><option>Tunai</option><option>Online / QR</option><option>Kad</option><option>Kredit pembekal</option></select>
+          </label>
+        </div>
+      </div>
+      <div class="dlg-foot">
+        <button type="submit" class="primary out">Simpan pembelian</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ============ PAPAR PEMBELIAN ============ -->
+  <dialog class="full" id="buyView">
+    <div class="dlg-head">
+      <button type="button" class="icon-btn" data-close aria-label="Tutup">✕</button>
+      <h3>Resit Pembelian</h3>
+    </div>
+    <div class="dlg-body">
+      <img id="bvImg" class="bv-img" alt="Gambar resit" hidden>
+      <dl class="info" id="bvInfo"></dl>
+    </div>
+    <div class="dlg-foot act-row">
+      <button class="ghost" id="bvEdit">Ubah</button>
+      <button class="ghost danger" id="bvDel">Padam</button>
+    </div>
+  </dialog>
+
+  <datalist id="dlPlates"></datalist>
+  <datalist id="dlVehicles"></datalist>
+  <datalist id="dlCusts"></datalist>
+  <datalist id="dlItems"></datalist>
+  <datalist id="dlSupps"></datalist>
+
+  <div id="printArea"></div>
+
+  <script src="db.js"></script>
+  <script src="receipt.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
