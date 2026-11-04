@@ -5,12 +5,14 @@ import android.content.ActivityNotFoundException;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
+import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.print.PrintAttributes;
 import android.print.PrintManager;
+import android.provider.ContactsContract;
 import android.provider.MediaStore;
 import android.util.Base64;
 import android.webkit.JavascriptInterface;
@@ -26,6 +28,8 @@ import android.widget.Toast;
 import androidx.core.content.FileProvider;
 import androidx.webkit.WebViewAssetLoader;
 
+import org.json.JSONObject;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
@@ -38,6 +42,7 @@ public class MainActivity extends Activity {
     private static final String HOST = "appassets.androidplatform.net";
     private static final String HOME = "https://" + HOST + "/assets/kedai/index.html";
     private static final int REQ_FILE = 1;
+    private static final int REQ_CONTACT = 2;
 
     private WebView web;
     private ValueCallback<Uri[]> fileCallback;
@@ -129,6 +134,10 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQ_CONTACT) {
+            if (resultCode == RESULT_OK && data != null && data.getData() != null) sendContact(data.getData());
+            return;
+        }
         if (requestCode != REQ_FILE || fileCallback == null) return;
         Uri[] result = null;
         if (resultCode == RESULT_OK) {
@@ -155,6 +164,22 @@ public class MainActivity extends Activity {
         web.evaluateJavascript("window.nativeBack ? nativeBack() : false", value -> {
             if (!"true".equals(value)) MainActivity.super.onBackPressed();
         });
+    }
+
+    /** Baca nama & nombor dari contact yang dipilih, hantar ke borang resit */
+    private void sendContact(Uri uri) {
+        String[] cols = {ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME, ContactsContract.CommonDataKinds.Phone.NUMBER};
+        try (Cursor c = getContentResolver().query(uri, cols, null, null, null)) {
+            if (c != null && c.moveToFirst()) {
+                String name = c.getString(0), number = c.getString(1);
+                String js = "window.onContactPicked && onContactPicked("
+                        + JSONObject.quote(name == null ? "" : name) + ","
+                        + JSONObject.quote(number == null ? "" : number) + ")";
+                web.evaluateJavascript(js, null);
+            }
+        } catch (Exception e) {
+            toast("Gagal baca contact: " + e.getMessage());
+        }
     }
 
     private void toast(String msg) {
@@ -221,6 +246,18 @@ public class MainActivity extends Activity {
                 PrintManager pm = (PrintManager) getSystemService(Context.PRINT_SERVICE);
                 String job = jobName == null || jobName.isEmpty() ? "Resit" : jobName;
                 pm.print(job, web.createPrintDocumentAdapter(job), new PrintAttributes.Builder().build());
+            });
+        }
+
+        @JavascriptInterface
+        public void pickContact() {
+            runOnUiThread(() -> {
+                Intent pick = new Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI);
+                try {
+                    startActivityForResult(pick, REQ_CONTACT);
+                } catch (ActivityNotFoundException e) {
+                    MainActivity.this.toast("Tiada app Contacts");
+                }
             });
         }
 
