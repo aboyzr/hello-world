@@ -163,3 +163,14 @@ test('hantar bingkai: ELM327 set header dan data (simulator)', async () => {
   await elm.endSend();
   assert.deepStrictEqual(sim.lastTx, { id: '5A0', data: '0100000000000000' });
 });
+
+test('imbas modul kenal pasti enjin, TCU, ABS (simulator)', async () => {
+  const { Elm327, SimTransport } = require('../elm327.js');
+  const elm = new Elm327(new SimTransport({ latency: 1 }));
+  await elm.init();
+  const r = await elm.scanModules();
+  const ecus = r.modules.map(m => m.ecu).sort();
+  assert.deepStrictEqual(ecus, ['7E8', '7E9', '7EA']);
+  assert.ok(r.modules.find(m => m.ecu === '7E8').obd);
+  assert.ok(r.modules.find(m => m.ecu === '7EA').uds);
+});

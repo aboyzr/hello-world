@@ -173,6 +173,12 @@
     'send.confirmTitle': 'Car stationary?', 'send.confirmPark': 'Speed could not be read. Confirm the car is parked, in P / neutral with the handbrake on, or on a bench.', 'send.confirmOk': 'Yes, send',
     'send.s1': 'Only on your own aftermarket ECU, a bench, or a stationary test car.', 'send.s2': 'Big STOP button stops repeating sends at once.',
     'send.s3': 'OBD diagnostic IDs (7DF, 7E0–7EF) are blocked.', 'send.s4': 'ELM327 sends at most ~10–50 frames/s, slower than the real bus.',
+        'module.': '(auto / unknown)', 'module.ecm': 'Engine (ECM)', 'module.tcm': 'Transmission (TCM)', 'module.abs': 'ABS / brakes', 'module.bcm': 'Body (BCM)', 'module.srs': 'Airbag (SRS)', 'module.ipc': 'Cluster (IPC)', 'module.gw': 'Gateway', 'module.other': 'Other',
+    'dlg.module': 'Module (which ECU)',
+    'mod.title': 'Scan modules',
+    'mod.intro': 'Reads which diagnostic modules answer on the bus (OBD + UDS TesterPresent to 7E0-7E7). This lists engine, TCU, ABS and others that use standard diagnostic addresses; broadcast IDs still need the Learn tab to map.',
+    'mod.scanning': 'Scanning modules…', 'mod.progress': 'Probing address {i} of {n}…', 'mod.none': 'Not scanned yet. Tap Scan (engine ON or key ON).',
+    'mod.only11': 'Module scan is for 11-bit CAN cars', 'mod.unknownEcu': 'Unknown module', 'mod.all': 'All', 'mod.scan': 'Scan',
         'dtc.generic': 'Generic code', 'dtc.maker': 'Manufacturer-specific code', 'dtc.sys.P': 'Powertrain (engine/transmission)',
     'dtc.sys.C': 'Chassis (ABS/steering)', 'dtc.sys.B': 'Body (airbag/lights/air-con)', 'dtc.sys.U': 'Network (CAN communication)'
   };
@@ -298,6 +304,12 @@
     'send.confirmTitle': 'Kereta tidak bergerak?', 'send.confirmPark': 'Kelajuan tidak dapat dibaca. Sahkan kereta diletak, gear P / neutral dengan brek tangan, atau di bench.', 'send.confirmOk': 'Ya, hantar',
     'send.s1': 'Hanya pada ECU aftermarket sendiri, bench, atau kereta ujian yang tidak bergerak.', 'send.s2': 'Butang HENTI besar hentikan hantaran berulang serta-merta.',
     'send.s3': 'ID diagnostik OBD (7DF, 7E0–7EF) disekat.', 'send.s4': 'ELM327 hantar paling banyak ~10–50 bingkai/s, lebih perlahan dari bas sebenar.',
+        'module.': '(auto / tak pasti)', 'module.ecm': 'Enjin (ECM)', 'module.tcm': 'Transmisi (TCM)', 'module.abs': 'ABS / brek', 'module.bcm': 'Body (BCM)', 'module.srs': 'Beg udara (SRS)', 'module.ipc': 'Meter (IPC)', 'module.gw': 'Gateway', 'module.other': 'Lain-lain',
+    'dlg.module': 'Modul (ECU mana)',
+    'mod.title': 'Imbas modul',
+    'mod.intro': 'Baca modul diagnostik yang menjawab di bas (OBD + UDS TesterPresent ke 7E0-7E7). Ini senaraikan enjin, TCU, ABS dan lain-lain yang guna alamat diagnostik standard; ID siaran masih perlu tab Belajar untuk dipetakan.',
+    'mod.scanning': 'Mengimbas modul…', 'mod.progress': 'Menguji alamat {i} dari {n}…', 'mod.none': 'Belum diimbas. Tekan Imbas (enjin ON atau kunci ON).',
+    'mod.only11': 'Imbas modul untuk kereta CAN 11-bit', 'mod.unknownEcu': 'Modul tidak dikenali', 'mod.all': 'Semua', 'mod.scan': 'Imbas',
         'act.saved': 'Disimpan: ID {id} bait {b} bit {bit} = {name}', 'act.active': 'AKTIF', 'act.inactive': 'tidak', 'act.detail': 'dari tindakan {n}%'
   };
 

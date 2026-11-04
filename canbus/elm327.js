@@ -183,6 +183,30 @@
 
     async endSend() { await this.send('ATCAF1').catch(() => {}); }
 
+    /*
+     * Imbas modul diagnostik (hanya baca, CAN 11-bit): hantar OBD 0100 ke semua ECU (7DF),
+     * kemudian UDS TesterPresent (3E 00) ke setiap alamat fizikal 7E0–7E7.
+     * Pulangkan header yang menjawab — itu modul yang hadir (enjin, TCU, ABS, dll.).
+     */
+    async scanModules(onProgress) {
+      if (!this.protocol.can || this.protocol.ext) return { ext: this.protocol.ext, modules: [] };
+      const found = new Map();
+      const add = (ecu, k) => { const v = found.get(ecu) || {}; v[k] = true; found.set(ecu, v); };
+      const r = await this.query('0100', 6000).catch(() => ({ messages: [] }));
+      for (const m of r.messages) if (m.bytes[0] === 0x41) add(m.ecu, 'obd');
+      for (let i = 0; i < 8; i++) {
+        const addr = (0x7E0 + i).toString(16).toUpperCase();
+        await this.send('ATSH' + addr);
+        const raw = await this.send('3E00', 1200).catch(() => '');
+        for (const m of Core.parseResponse(raw, this.protocol).messages) {
+          if (m.bytes[0] === 0x7E || (m.bytes[0] === 0x7F && m.bytes[1] === 0x3E)) add(m.ecu, 'uds');
+        }
+        if (onProgress) onProgress(i + 1, 8);
+      }
+      await this.send('ATSH7DF').catch(() => {});   // kembalikan header siaran
+      return { ext: false, modules: [...found.entries()].map(([ecu, v]) => ({ ecu, obd: !!v.obd, uds: !!v.uds })) };
+    }
+
     // Uji sama ada dongle sokong ATMA dan ada trafik di port OBD
     async probeSniff() {
       if (!this.protocol.can) return { ok: false, reason: tr('elm.notCan', 'Kereta bukan protokol CAN') };
@@ -327,6 +351,7 @@
       const parts = this.headers ? [header].concat(b) : b;
       return this.spaces ? parts.join(' ') : parts.join('');
     }
+    _sf(header, payload) { return this._fmt(header, [payload.length].concat(payload, Array(Math.max(0, 7 - payload.length)).fill(0x55))); }
     _frames(payload) {
       // Bentuk bingkai ISO-TP dari ECU 7E8
       if (payload.length <= 7) return [this._fmt('7E8', [payload.length].concat(payload, Array(7 - payload.length).fill(0x55)))];
@@ -360,6 +385,11 @@
       }
       const s = this._state(); const mode = c.slice(0, 2), pid = parseInt(c.slice(2, 4), 16);
       const w16 = v => [(Math.round(v) >> 8) & 0xff, Math.round(v) & 0xff];
+      if (c === '3E00') {
+        const present = { '7E0': '7E8', '7E1': '7E9', '7E2': '7EA' };   // enjin, TCU, ABS
+        const resp = present[this.txHeader || '7DF'];
+        return resp ? this._sf(resp, [0x7E, 0x00]) : 'NO DATA';
+      }
       if (mode === '01') {
         const sup = { 0x00: [0xBE, 0x3F, 0xA8, 0x13], 0x20: [0x90, 0x05, 0xB0, 0x15], 0x40: [0x7A, 0x1C, 0x00, 0x00] };
         const v = {
@@ -369,6 +399,7 @@
           0x11: [Math.round(s.tps * 2.55)], 0x1C: [6], 0x1F: w16(s.t), 0x21: [0, 42], 0x2F: [150], 0x31: [0x01, 0xF4],
           0x33: [101], 0x42: [0x30, 0xD4], 0x46: [70], 0x51: [1], 0x5C: [Math.round(s.cool + 35)]
         };
+        if (pid === 0x00) return this._frames([0x41, 0x00].concat(sup[0x00])) + '\r' + this._sf('7E9', [0x41, 0x00, 0x80, 0x00, 0x00, 0x00]); // enjin + TCU
         if (sup[pid]) return this._frames([0x41, pid].concat(sup[pid]));
         if (v[pid]) return this._frames([0x41, pid].concat(v[pid]));
         return 'NO DATA';

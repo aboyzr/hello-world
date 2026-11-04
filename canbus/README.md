@@ -16,7 +16,7 @@ Bluetooth dari Android turut ikut bahasa dipilih. Teks ada dalam `i18n.js`.
 |---|---|
 | **Graf** | Sehingga 4 sensor serentak, 30 saat terakhir. Isyarat CAN menunjukkan ID, bait, nilai mentah, formula dan Hz. PID standard OBD juga boleh dipilih. |
 | **Sniff** | Semua bingkai di bas (`ATMA`): jadual ID, bait berubah diwarnakan, peranan bait (counter, checksum, analog, bit), tapis ID/mask, rakam dan eksport CSV. **Ambil asas** 3 saat, kemudian **Hanya berubah** sorok semua ID yang tak berubah selepas tindakan anda. Tekan satu ID untuk lihat graf setiap bait, 8 bit setiap bait, dan tambah bait mentah terus ke Graf. |
-| **Kenal ID** | Label setiap ID dengan sumbernya: **Standard** (OBD/UDS 7DF/7E0–7EF, J1939), **DBC** (fail import), **Dipelajari**, **Sendiri**, **Tekaan** (dari corak data) atau **Belum dikenal**. Profil ikut kereta, import/eksport `.dbc`. |
+| **Kenal ID** | **Imbas modul**: senaraikan modul diagnostik yang menjawab di bas (enjin, TCU, ABS dan lain-lain) melalui OBD + UDS TesterPresent ke 7E0–7E7. Setiap ID boleh ditag modulnya (ECM/TCM/ABS/BCM/SRS/IPC) dan ditapis ikut modul; tag dicadang automatik dari ID diagnostik dan pembelajaran tindakan. Label setiap ID dengan sumbernya: **Standard** (OBD/UDS 7DF/7E0–7EF, J1939), **DBC** (fail import), **Dipelajari**, **Sendiri**, **Tekaan** (dari corak data) atau **Belum dikenal**. Profil ikut kereta, import/eksport `.dbc`. |
 | **Belajar** | **Belajar sendiri (auto)**: pantau beberapa PID di latar belakang dan cadangkan label yang anda sahkan dengan ✓. *Banding dengan PID*: baca sensor melalui PID standard sambil rakam bingkai CAN, cari bait yang bergerak seiring (korelasi) dan kira skala/ofset. *Cari nilai*: taip nombor di meter (odometer, % minyak), app cari bait yang mengandungi nombor itu (8–32 bit, LE/BE, skala biasa); tapis semula bila nombor berubah. *Tindakan*: tekan "Saya sedang buat" semasa tekan brek / buka pintu; app cari bit yang berubah. |
 | **Sambung** | Senarai dongle dipair, imbas BLE, Demo. Uji cip, protokol, VIN, voltan dan sama ada mod sniff disokong. Terminal arahan AT. |
 
@@ -27,6 +27,7 @@ Bluetooth dari Android turut ikut bahasa dipilih. Teks ada dalam `i18n.js`.
 - Rakaman sniff terakhir disimpan, jadi CSV masih boleh dieksport selepas app dibuka semula.
 
 ## Had yang perlu tahu
+- Imbas modul hanya kesan modul yang guna alamat diagnostik standard (7E0–7EF). ID siaran (broadcast) biasa tidak menyatakan modul asalnya, jadi untuk petakan ID siaran ke TCU/ABS/BCM, guna tab Belajar (tindakan) atau cabut modul dan lihat ID mana hilang. Hanya CAN 11-bit.
 - ID CAN mentah ditetapkan pengeluar dan tiada senarai rasmi. Label **Tekaan** hanya petunjuk; sahkan dengan tab Belajar.
 - Banyak kereta baru ada gateway yang menyekat trafik dalaman dari port OBD2. App beritahu jika tiada trafik; graf PID masih berfungsi.
 - Sesetengah klon ELM327 murah (terutama "v2.1") tidak sokong `ATMA` atau cepat `BUFFER FULL`. Guna tapis ID.

@@ -72,7 +72,7 @@ function applyLanguage() {
   if (!$('actName').value || $('actName').dataset.auto === '1') { $('actName').value = t('act.default'); $('actName').dataset.auto = '1'; }
   updatePill(); updateButtons(); updateBase(); renderResume(); renderProfiles(); fillLearnPids(); renderInfo(); refreshGraphIndex(); buildCharts();
   if (findCands) renderFind();
-  renderSend(); updateAuto();
+  renderSend(); updateAuto(); renderMods(); $('btnScanMod').textContent = t('mod.scan');
   renderLearn(learn.final); renderAct(act.final);
   render(true);
 }
@@ -380,21 +380,69 @@ function renderSniff() {
 $('sniffTable').addEventListener('click', e => { const r = e.target.closest('.srow[data-id]'); if (r) openIdDialog(r.dataset.id); });
 
 // ---------- KENAL ID ----------
+// Modul: tag fungsi modul untuk setiap ID. Teka dari ID diagnostik.
+const MODULE_KEYS = ['ecm', 'tcm', 'abs', 'bcm', 'srs', 'ipc', 'gw', 'other'];
+function moduleOf(id) {
+  const p = profile().labels[id];
+  if (p && p.module) return p.module;
+  const n = parseInt(id, 16);
+  if (id.length <= 3) { if (n === 0x7E8) return 'ecm'; if (n === 0x7E9) return 'tcm'; if (n === 0x7EA || n === 0x7EB) return 'abs'; }
+  return '';
+}
+function guessModule(text) {
+  const s = (text || '').toLowerCase();
+  if (/brek|brake|abs|roda|wheel|esp|trc|traction/.test(s)) return 'abs';
+  if (/gear|gigi|transmis|tcu|tcm|clutch|klac|syif|shift/.test(s)) return 'tcm';
+  if (/pintu|door|kunci|lock|lampu|light|signal|hon|horn|wiper|tingkap|window|immobil/.test(s)) return 'bcm';
+  if (/beg udara|airbag|srs/.test(s)) return 'srs';
+  if (/meter|cluster|odo|speedo|panel/.test(s)) return 'ipc';
+  return '';
+}
+let modScan = [], modFilter = '';
+$('btnScanMod').onclick = async () => {
+  if (needCan()) return;
+  if (elm.protocol.ext) { toast(t('mod.only11')); return; }
+  if (engine) { toast(t('msg.stopFirst')); return; }
+  engine = { kind: 'term' };
+  $('btnScanMod').disabled = true; $('modList').innerHTML = `<p class="sub">${esc(t('mod.scanning'))}</p>`;
+  try {
+    const r = await elm.scanModules((i, n) => { $('modList').innerHTML = `<p class="sub">${esc(t('mod.progress', { i, n }))}</p>`; });
+    modScan = r.modules;
+  } catch (e) { toast(e.message); } finally { engine = null; $('btnScanMod').disabled = false; renderMods(); }
+};
+function renderMods() {
+  if (!modScan.length) { $('modList').innerHTML = `<p class="sub">${esc(t('mod.none'))}</p>`; return; }
+  $('modList').innerHTML = modScan.map(m => {
+    const std = A.standardLabel(m.ecu, false);
+    const name = std ? std.name : t('mod.unknownEcu');
+    return `<div class="mod-row"><span><b>${m.ecu}</b> · ${esc(name)}</span><span class="via">${[m.obd ? 'OBD' : '', m.uds ? 'UDS' : ''].filter(Boolean).join(' + ')}</span></div>`;
+  }).join('');
+}
+function renderModFilter() {
+  const present = new Set(sortIds().map(e => moduleOf(e.id)).filter(Boolean));
+  for (const id in profile().labels) { const m = moduleOf(id); if (m) present.add(m); }
+  const chips = [['', t('mod.all')]].concat([...present].sort().map(m => [m, t('module.' + m)]));
+  $('modFilter').innerHTML = present.size ? chips.map(([k, lbl]) => `<button class="chip" data-m="${k}" aria-pressed="${modFilter === k}">${esc(lbl)}</button>`).join('') : '';
+  $('modFilter').querySelectorAll('button').forEach(b => b.onclick = () => { modFilter = b.dataset.m; renderIds(); });
+}
 function renderIds() {
-  const rows = sortIds();
-  const known = Object.keys(profile().labels).filter(id => !hist.ids.has(id));
+  renderModFilter();
+  let rows = sortIds();
+  if (modFilter) rows = rows.filter(e => moduleOf(e.id) === modFilter);
+  const known = Object.keys(profile().labels).filter(id => !hist.ids.has(id) && (!modFilter || moduleOf(id) === modFilter));
   const counts = { std: 0, dbc: 0, learn: 0, user: 0, guess: 0, unk: 0 };
+  const mtag = id => { const m = moduleOf(id); return m ? `<span class="mtag">${esc(t('module.' + m))}</span>` : ''; };
   const html = rows.map(e => {
     const l = labelFor(e.id); counts[l.source]++;
     const d = e.frames[e.frames.length - 1].data;
     const sv = l.signals.slice(0, 4).map(s => esc(sigName(s)) + ': ' + esc(sigValueText(s, d))).join(' · ');
     const note = noteText(e.id);
-    return `<button class="idc" data-id="${e.id}"><span class="i">${e.id}</span><span class="f">${esc(l.name)}${note ? ' 📝' : ''}</span><span class="src s-${l.source}">${esc(SRC(l.source))}</span>`
+    return `<button class="idc" data-id="${e.id}"><span class="i">${e.id}</span><span class="f">${esc(l.name)}${note ? ' 📝' : ''} ${mtag(e.id)}</span><span class="src s-${l.source}">${esc(SRC(l.source))}</span>`
       + `<span class="d">${esc(l.detail || '')}${l.detail ? ' · ' : ''}${d.map(C.hex2).join(' ')}</span>${note ? `<span class="sv">${esc(note)}</span>` : ''}${sv ? `<span class="sv">${sv}</span>` : ''}</button>`;
   }).join('');
   $('idList').innerHTML = html + (known.length ? `<h3 class="sec">${esc(t('ids.notSeen'))}</h3>` + known.sort().map(id => {
     const l = labelFor(id);
-    return `<button class="idc" data-id="${id}"><span class="i">${id}</span><span class="f">${esc(l.name)}</span><span class="src s-${l.source}">${esc(SRC(l.source))}</span><span class="d">${esc(t('ids.nSignals', { n: (profile().labels[id].signals || []).length }))}</span></button>`;
+    return `<button class="idc" data-id="${id}"><span class="i">${id}</span><span class="f">${esc(l.name)} ${mtag(id)}</span><span class="src s-${l.source}">${esc(SRC(l.source))}</span><span class="d">${esc(t('ids.nSignals', { n: (profile().labels[id].signals || []).length }))}</span></button>`;
   }).join('') : '');
   $('idsStats').textContent = rows.length ? t('ids.stats', Object.assign({ n: rows.length }, counts)) : t('ids.empty');
 }
@@ -411,6 +459,8 @@ function openIdDialog(id) {
   $('idDlgRaw').textContent = e ? t('dlg.latest', { data: e.frames[e.frames.length - 1].data.map(C.hex2).join(' '), n: e.count }) : t('dlg.notSeen');
   $('idName').value = p.name || '';
   $('idNote').value = p.note || '';
+  $('idModule').innerHTML = `<option value="">${esc(t('module.'))}</option>` + MODULE_KEYS.map(m => `<option value="${m}">${esc(t('module.' + m))}</option>`).join('');
+  $('idModule').value = p.module || '';
   $('idName').placeholder = l.name;
   $('btnDelLabel').hidden = !profile().labels[id];
   renderDlgSigs(l);
@@ -475,8 +525,9 @@ $('idDlg').addEventListener('close', () => {
   const name = $('idName').value.trim();
   const old = profile().labels[dlgId];
   const note = $('idNote').value.trim();
-  if (!name && !dlgSigs.length && !note) delete profile().labels[dlgId];
-  else profile().labels[dlgId] = Object.assign({}, old || {}, { name, note, source: old && old.source && old.source !== 'user' ? old.source : 'user', signals: dlgSigs });
+  const module = $('idModule').value;
+  if (!name && !dlgSigs.length && !note && !module) delete profile().labels[dlgId];
+  else profile().labels[dlgId] = Object.assign({}, old || {}, { name, note, module, source: old && old.source && old.source !== 'user' ? old.source : 'user', signals: dlgSigs });
   saveProfiles(); refreshGraphIndex(); render(true); toast(t('msg.savedProfile', { p: profiles.current }));
 });
 
@@ -904,6 +955,7 @@ function renderAct(final) {
     l.signals = (l.signals || []).filter(s => s.name !== name);
     l.signals.push({ name, id: r.id, start: r.start, length: 1, order: 'intel', signed: false, scale: 1, offset: 0, unit: '', source: 'learn', active: r.activeHigh ? 1 : 0 });
     if (l.learnPid == null) l.actScore = Math.round(r.score * 100);
+    if (!l.module) { const g = guessModule(name); if (g) l.module = g; }
     saveProfiles(); refreshGraphIndex();
     toast(t('act.saved', { id: r.id, b: r.byte, bit: r.bit, name }));
   });

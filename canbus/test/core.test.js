@@ -70,7 +70,7 @@ test('pemacu ELM327 dengan simulator', async () => {
   const elm = new Elm327(new SimTransport({ latency: 1 }));
   const info = await elm.init();
   assert.ok(info.protocol.can);
-  assert.deepStrictEqual(info.ecus, ['7E8']);
+  assert.deepStrictEqual(info.ecus, ['7E8', '7E9']);
   const pids = await elm.supportedPids();
   assert.ok(pids.includes(0x0C) && pids.includes(0x42));
   const rpm = await elm.readPid(0x0C);

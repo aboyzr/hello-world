@@ -179,3 +179,9 @@ dialog::backdrop { background: rgba(0,0,0,.6); }
 .auto-sug .pct { font: 600 13px var(--mono); color: var(--ok); }
 .auto-sug button { border: 1px solid var(--line); background: none; border-radius: 8px; min-height: 34px; padding: 4px 10px; font-size: 13px; }
 .auto-sug button.ok { color: var(--ok); border-color: var(--ok); }
+
+.mod-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.mod-row:last-child { border-bottom: 0; }
+.mod-row .via { font: 11px var(--mono); color: var(--muted); }
+.idc .mtag { font: 600 10px system-ui, sans-serif; text-transform: uppercase; letter-spacing: .03em; color: var(--dbc); border: 1px solid currentColor; border-radius: 5px; padding: 2px 5px; }
+.chips .chip { cursor: pointer; }

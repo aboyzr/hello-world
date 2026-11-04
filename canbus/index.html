@@ -66,6 +66,15 @@
         <button class="btn" id="btnExportDbc" data-i18n="ids.export"></button>
         <button class="btn" id="btnDemoDbc" hidden data-i18n="ids.demoDbc"></button>
       </div>
+      <section class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <h2 style="margin:0" data-i18n="mod.title"></h2>
+          <button class="btn small" id="btnScanMod"></button>
+        </div>
+        <p class="sub" data-i18n="mod.intro"></p>
+        <div id="modList"></div>
+      </section>
+      <div class="chips" id="modFilter"></div>
       <p class="sub" id="idsStats"></p>
       <div id="idList"></div>
     </section>
@@ -232,6 +241,7 @@
       <div class="bytes" id="idBytes"></div>
       <p class="sub" data-i18n="bytes.help"></p>
       <label class="field" for="idName"><span data-i18n="dlg.name"></span><input id="idName" name="name" data-i18n-ph="dlg.namePh"></label>
+      <label class="field" for="idModule"><span data-i18n="dlg.module"></span><select id="idModule"></select></label>
       <h3 class="sec" data-i18n="dlg.signals"></h3>
       <ul class="list" id="idSigs"></ul>
       <label class="field" for="idNote"><span data-i18n="dlg.note"></span><textarea id="idNote" rows="2" data-i18n-ph="dlg.notePh"></textarea></label>
