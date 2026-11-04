@@ -174,3 +174,19 @@ test('imbas modul kenal pasti enjin, TCU, ABS (simulator)', async () => {
   assert.ok(r.modules.find(m => m.ecu === '7E8').obd);
   assert.ok(r.modules.find(m => m.ecu === '7EA').uds);
 });
+
+test('hantar turutan: ELM327 tx setiap bingkai, header hanya bila ID berubah', async () => {
+  const { Elm327, SimTransport } = require('../elm327.js');
+  const sim = new SimTransport({ latency: 1 });
+  const elm = new Elm327(sim);
+  await elm.init();
+  const seq = [['320', [0, 0x1F, 0x56]], ['320', [0, 0x1F, 0x60]], ['5A0', [1, 0]]];
+  await elm.beginSend();
+  const headers = [];
+  const origWrite = sim.write.bind(sim);
+  sim.write = s => { const m = s.trim().toUpperCase().match(/^ATSH(\w+)/); if (m) headers.push(m[1]); origWrite(s); };
+  for (const [id, b] of seq) await elm.txFrame(id, b);
+  await elm.endSend();
+  assert.deepStrictEqual(headers, ['320', '5A0']);   // ATSH320 sekali, kemudian ATSH5A0
+  assert.deepStrictEqual(sim.lastTx, { id: '5A0', data: '0100' });
+});

@@ -72,7 +72,7 @@ function applyLanguage() {
   if (!$('actName').value || $('actName').dataset.auto === '1') { $('actName').value = t('act.default'); $('actName').dataset.auto = '1'; }
   updatePill(); updateButtons(); updateBase(); renderResume(); renderProfiles(); fillLearnPids(); renderInfo(); refreshGraphIndex(); buildCharts();
   if (findCands) renderFind();
-  renderSend(); updateAuto(); renderMods(); $('btnScanMod').textContent = t('mod.scan');
+  renderSend(); updateAuto(); renderMods(); $('btnScanMod').textContent = t('mod.scan'); $('btnSeqLoad').textContent = t('send.loadRec');
   renderLearn(learn.final); renderAct(act.final);
   render(true);
 }
@@ -1073,14 +1073,23 @@ function renderAuto() {
 }
 
 // ---------- Hantar bingkai ke ECU (aftermarket / bench) ----------
+// Tiga mod: sekali, ulang (berkala), turutan (senarai bingkai, boleh gelung).
 // Kunci keselamatan: perlu akui amaran, kereta tidak bergerak, dan ID diagnostik OBD disekat.
-let sending = null;
+let sending = null, sendMode = 'once';
 const BLOCKED_SEND = id => { const n = parseInt(id, 16); return id.length <= 3 && n >= 0x7DF && n <= 0x7EF; };
+const validId = id => /^[0-9A-F]{3}$|^[0-9A-F]{8}$/.test(id);
+const parseBytes = str => { const d = str.trim().split(/\s+/).filter(Boolean); return d.every(b => /^[0-9A-F]{1,2}$/.test(b)) && d.length >= 1 && d.length <= 8 ? d.map(b => parseInt(b, 16)) : null; };
+function setSendMode(m) {
+  sendMode = m;
+  document.querySelectorAll('#view-send .chip').forEach(c => c.setAttribute('aria-pressed', String(c.dataset.mode === m)));
+  $('singlePane').hidden = m === 'seq'; $('seqPane').hidden = m !== 'seq'; $('rateField').hidden = m !== 'repeat';
+  updateSend();
+}
+document.querySelectorAll('#view-send .chip').forEach(c => c.onclick = () => setSendMode(c.dataset.mode));
 function updateSend() {
-  const ack = $('sendAck').checked;
-  $('btnSend').disabled = !ack || !!sending;
+  $('btnSend').disabled = !$('sendAck').checked || !!sending;
   $('btnSendStop').hidden = !sending;
-  $('btnSend').textContent = sending && sending.hz ? t('send.sending') : t('send.send');
+  $('btnSend').textContent = sending ? t('send.sending') : sendMode === 'once' ? t('send.send') : sendMode === 'repeat' ? t('send.startRepeat') : t('send.startSeq');
 }
 $('sendAck').onchange = updateSend;
 async function carMoving() {
@@ -1088,41 +1097,92 @@ async function carMoving() {
   const r = await elm.readPid(0x0D).catch(() => null);
   return r ? r.value > 0 : null;
 }
-$('btnSend').onclick = async () => {
-  if (needCan()) return;
-  if (!$('sendAck').checked) { toast(t('send.mustAck')); return; }
-  const id = $('sendId').value.trim().toUpperCase();
-  if (!/^[0-9A-F]{3}$|^[0-9A-F]{8}$/.test(id)) { toast(t('send.badId')); return; }
-  if (BLOCKED_SEND(id)) { toast(t('send.blocked')); return; }
-  const data = $('sendData').value.trim().split(/\s+/).filter(Boolean);
-  if (!data.every(b => /^[0-9A-F]{1,2}$/.test(b)) || data.length === 0 || data.length > 8) { toast(t('send.badData')); return; }
-  const bytes = data.map(b => parseInt(b, 16));
+// Baca turutan dari textarea: setiap baris "ID B0 B1 …"; pulangkan {frames, bad} atau {error}
+function parseSequence() {
+  const lines = $('seqText').value.split(/\n/).map(l => l.trim()).filter(Boolean);
+  const frames = []; let bad = 0;
+  for (const line of lines) {
+    const parts = line.replace(/,/g, ' ').split(/\s+/);
+    const id = parts[0].toUpperCase();
+    const bytes = parseBytes(parts.slice(1).join(' '));
+    if (!validId(id) || !bytes) { bad++; continue; }
+    if (BLOCKED_SEND(id)) return { error: t('send.blockedSeq', { id }) };
+    frames.push({ id, bytes });
+  }
+  return { frames, bad };
+}
+$('btnSeqLoad').onclick = () => {
+  if (!lastRec || !lastRec.length) { toast(t('send.noRec')); return; }
+  const lines = lastRec.slice(0, 2000).map(r => r[1] + ' ' + r[3]);
+  $('seqText').value = lines.join('\n');
+  toast(t('send.loaded', { n: lines.length }));
+};
+async function guardSend() {
+  if (needCan()) return false;
+  if (!$('sendAck').checked) { toast(t('send.mustAck')); return false; }
   const moving = await carMoving();
-  if (moving === true) { toast(t('send.moving')); return; }
-  if (moving === null && !(await ask(t('send.confirmTitle'), t('send.confirmPark'), { ok: t('send.confirmOk') }))) return;
+  if (moving === true) { toast(t('send.moving')); return false; }
+  if (moving === null && !(await ask(t('send.confirmTitle'), t('send.confirmPark'), { ok: t('send.confirmOk') }))) return false;
+  return true;
+}
+$('btnSend').onclick = async () => {
+  if (sendMode === 'seq') return startSeq();
+  const id = $('sendId').value.trim().toUpperCase();
+  if (!validId(id)) { toast(t('send.badId')); return; }
+  if (BLOCKED_SEND(id)) { toast(t('send.blocked')); return; }
+  const bytes = parseBytes($('sendData').value);
+  if (!bytes) { toast(t('send.badData')); return; }
+  if (!(await guardSend())) return;
   if (engine) await stopEngine();
-  const hz = +$('sendHz').value;
-  await elm.sendFrame(id, bytes).catch(e => toast(e.message));
-  if (!hz) { await elm.endSend().catch(() => {}); $('sendInfo').textContent = t('send.sentOnce', { id }); return; }
-  // Hantar berkala
-  keepScreen(true);
-  sending = { id, bytes, hz, count: 1, t0: now() }; updateSend();
-  const period = 1000 / hz;
+  if (sendMode === 'once') {
+    await elm.sendFrame(id, bytes).catch(e => toast(e.message));
+    await elm.endSend().catch(() => {});
+    $('sendInfo').textContent = t('send.sentOnce', { id });
+    return;
+  }
+  const hz = +$('sendHz').value, period = 1000 / hz;
+  keepScreen(true); sending = { count: 0 }; updateSend();
   (async () => {
+    await elm.beginSend().catch(() => {});
     while (sending && elm) {
-      await sleep(period);
-      if (!sending || !elm) break;
-      await elm.sendFrame(id, bytes).catch(() => {});
+      await elm.txFrame(id, bytes).catch(() => {});
       sending.count++;
       $('sendInfo').textContent = t('send.sendingInfo', { id, hz, n: sending.count });
+      await sleep(period);
     }
     if (elm) await elm.endSend().catch(() => {});
     keepScreen(false); updateSend();
   })();
 };
+async function startSeq() {
+  const r = parseSequence();
+  if (r.error) { toast(r.error); return; }
+  if (!r.frames.length) { toast(t('send.seqEmpty')); return; }
+  if (!(await guardSend())) return;
+  if (engine) await stopEngine();
+  const gap = Math.max(0, +$('seqGap').value || 0), loop = !!$('seqLoop').value, frames = r.frames;
+  keepScreen(true); sending = { count: 0 }; updateSend();
+  (async () => {
+    await elm.beginSend().catch(() => {});
+    let round = 0;
+    do {
+      round++;
+      for (let i = 0; i < frames.length && sending && elm; i++) {
+        await elm.txFrame(frames[i].id, frames[i].bytes).catch(() => {});
+        sending.count++;
+        $('sendInfo').textContent = t('send.seqInfo', { i: i + 1, total: frames.length, r: round, n: sending.count });
+        if (gap) await sleep(gap);
+      }
+    } while (loop && sending && elm);
+    if (elm) await elm.endSend().catch(() => {});
+    keepScreen(false); sending = null; updateSend();
+    if (!loop) $('sendInfo').textContent = t('send.seqDone', { n: frames.length, r: round });
+  })();
+}
 $('btnSendStop').onclick = () => { sending = null; $('sendInfo').textContent = t('send.stopped'); };
 function renderSend() {
   $('sendSafe').innerHTML = [t('send.s1'), t('send.s2'), t('send.s3'), t('send.s4')].map(x => `<li class="n">${esc(x)}</li>`).join('');
+  document.querySelectorAll('#view-send .chip').forEach(c => c.setAttribute('aria-pressed', String(c.dataset.mode === sendMode)));
   updateSend();
 }
 

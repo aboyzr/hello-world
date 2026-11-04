@@ -166,22 +166,29 @@
      * Hantar satu bingkai CAN mentah (untuk ECU aftermarket / bench, cth MyEFI).
      * ATCAF0 supaya bait dihantar tepat tanpa PCI; ATSH set ID. Tidak menunggu jawapan.
      */
-    async sendFrame(id, data) {
+    async beginSend() {
       if (!this.protocol.can) throw new Error(tr('elm.canOnly', 'Sniff CAN hanya untuk kereta protokol CAN'));
-      const hex = data.map(b => Core.hex2(b & 0xff)).join('');
       await this.send('ATCAF0');
-      if (this.protocol.ext) {
-        const full = id.toUpperCase().padStart(8, '0');
-        await this.send('ATCP' + full.slice(0, 2));      // bait atas (priority)
-        await this.send('ATSH' + full.slice(2));         // 6 nibble bawah
-      } else {
-        await this.send('ATSH' + id.toUpperCase().padStart(3, '0'));
-      }
-      // Hantar data; ELM akan cuba terima, jadi had masa pendek dan abaikan NO DATA
-      await this.send(hex, 700).catch(() => {});
+      this._txId = null;
     }
 
-    async endSend() { await this.send('ATCAF1').catch(() => {}); }
+    // Hantar satu bingkai; header hanya ditetapkan bila ID berubah (lebih pantas untuk turutan)
+    async txFrame(id, data) {
+      id = id.toUpperCase();
+      if (id !== this._txId) {
+        if (this.protocol.ext) {
+          const full = id.padStart(8, '0');
+          await this.send('ATCP' + full.slice(0, 2));
+          await this.send('ATSH' + full.slice(2));
+        } else await this.send('ATSH' + id.padStart(3, '0'));
+        this._txId = id;
+      }
+      await this.send(data.map(b => Core.hex2(b & 0xff)).join(''), 500).catch(() => {});
+    }
+
+    async sendFrame(id, data) { await this.beginSend(); await this.txFrame(id, data); }
+
+    async endSend() { this._txId = null; await this.send('ATCAF1').catch(() => {}); }
 
     /*
      * Imbas modul diagnostik (hanya baca, CAN 11-bit): hantar OBD 0100 ke semua ECU (7DF),
