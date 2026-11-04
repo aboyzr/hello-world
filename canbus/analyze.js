@@ -1,0 +1,350 @@
+/*
+ * Kenal ID CAN: label standard (OBD/UDS, J1939), tekaan dari corak data,
+ * pembelajaran dengan korelasi PID dan dengan tindakan (tekan brek, buka pintu…).
+ */
+(function (root) {
+  'use strict';
+  const Core = root.ObdCore || (typeof require !== 'undefined' ? require('./can-core.js') : null);
+  const fill = (s, v) => String(s).replace(/\{(\w+)\}/g, (m, k) => (v && v[k] != null ? v[k] : m));
+  const tr = (k, fb, v) => (root.I18N ? root.I18N.t(k, v, fb) : fill(fb, v));
+
+  // ---------- ID standard ----------
+  const ECU_NAMES = ['enjin (ECM)', 'transmisi (TCM)', 'ECU #3 (biasanya ABS)', 'ECU #4', 'ECU #5', 'ECU #6', 'ECU #7', 'ECU #8'];
+
+  // PGN J1939 biasa (lori, bas, jentera) — kedudukan isyarat ikut SAE J1939-71
+  const J1939 = {
+    61444: { name: 'EEC1 · Kawalan enjin elektronik 1', signals: [
+      { spn: 513, name: 'Tork enjin sebenar', start: 16, length: 8, scale: 1, offset: -125, unit: '%' },
+      { spn: 190, name: 'RPM enjin', start: 24, length: 16, scale: 0.125, offset: 0, unit: 'rpm' }] },
+    61443: { name: 'EEC2 · Kawalan enjin elektronik 2', signals: [
+      { spn: 91, name: 'Pedal minyak 1', start: 8, length: 8, scale: 0.4, offset: 0, unit: '%' },
+      { spn: 92, name: 'Beban enjin', start: 16, length: 8, scale: 1, offset: 0, unit: '%' }] },
+    65262: { name: 'ET1 · Suhu enjin', signals: [
+      { spn: 110, name: 'Suhu air penyejuk', start: 0, length: 8, scale: 1, offset: -40, unit: '°C' },
+      { spn: 174, name: 'Suhu minyak bahan api', start: 8, length: 8, scale: 1, offset: -40, unit: '°C' },
+      { spn: 175, name: 'Suhu minyak enjin', start: 16, length: 16, scale: 0.03125, offset: -273, unit: '°C' }] },
+    65263: { name: 'EFL/P1 · Paras/tekanan cecair enjin', signals: [
+      { spn: 100, name: 'Tekanan minyak enjin', start: 24, length: 8, scale: 4, offset: 0, unit: 'kPa' }] },
+    65265: { name: 'CCVS · Kelajuan kenderaan / cruise', signals: [
+      { spn: 84, name: 'Kelajuan roda', start: 8, length: 16, scale: 1 / 256, offset: 0, unit: 'km/j' }] },
+    65266: { name: 'LFE · Penggunaan bahan api', signals: [
+      { spn: 183, name: 'Kadar bahan api', start: 0, length: 16, scale: 0.05, offset: 0, unit: 'L/j' }] },
+    65270: { name: 'IC1 · Keadaan intake/ekzos', signals: [
+      { spn: 102, name: 'Tekanan boost', start: 8, length: 8, scale: 2, offset: 0, unit: 'kPa' },
+      { spn: 105, name: 'Suhu manifold intake', start: 16, length: 8, scale: 1, offset: -40, unit: '°C' }] },
+    65271: { name: 'VEP1 · Voltan kenderaan', signals: [
+      { spn: 168, name: 'Voltan bateri', start: 32, length: 16, scale: 0.05, offset: 0, unit: 'V' }] },
+    65276: { name: 'DD · Paparan pemandu', signals: [
+      { spn: 96, name: 'Paras bahan api', start: 8, length: 8, scale: 0.4, offset: 0, unit: '%' }] },
+    65253: { name: 'HOURS · Jam enjin', signals: [
+      { spn: 247, name: 'Jumlah jam enjin', start: 0, length: 32, scale: 0.05, offset: 0, unit: 'j' }] },
+    65226: { name: 'DM1 · Kod kerosakan aktif (J1939)', signals: [] },
+    59904: { name: 'Permintaan PGN (J1939)', signals: [] }
+  };
+
+  function j1939Pgn(idHex) {
+    const id = parseInt(idHex, 16);
+    const pf = (id >> 16) & 0xff, ps = (id >> 8) & 0xff, dp = (id >> 24) & 0x3;
+    const pgn = (dp << 16) | (pf << 8) | (pf < 240 ? 0 : ps);
+    return { pgn, src: id & 0xff, prio: (id >> 26) & 7 };
+  }
+
+  const ecuName = i => tr('an.ecu' + i, ECU_NAMES[i]);
+  function standardLabel(idHex, isExt) {
+    const id = parseInt(idHex, 16);
+    if (!isExt && idHex.length <= 3) {
+      if (id === 0x7DF) return { name: tr('an.reqAll', 'Soalan diagnostik OBD ke semua ECU'), source: 'std' };
+      if (id >= 0x7E0 && id <= 0x7E7) return { name: tr('an.reqTo', 'Soalan diagnostik ke {ecu}', { ecu: ecuName(id - 0x7E0) }), source: 'std' };
+      if (id >= 0x7E8 && id <= 0x7EF) return { name: tr('an.respFrom', 'Jawapan diagnostik dari {ecu}', { ecu: ecuName(id - 0x7E8) }), source: 'std' };
+      return null;
+    }
+    if ((id & 0x1FFF0000) === 0x18DB0000 && (id & 0xff) === 0xF1) return { name: tr('an.reqAll29', 'Soalan diagnostik OBD 29-bit ke semua ECU'), source: 'std' };
+    if ((id & 0x1FFF0000) === 0x18DA0000) {
+      const ta = (id >> 8) & 0xff, sa = id & 0xff;
+      if (sa === 0xF1) return { name: tr('an.reqTo', 'Soalan diagnostik ke {ecu}', { ecu: 'ECU 0x' + Core.hex2(ta) }), source: 'std' };
+      if (ta === 0xF1) return { name: tr('an.respFrom', 'Jawapan diagnostik dari {ecu}', { ecu: 'ECU 0x' + Core.hex2(sa) }), source: 'std' };
+    }
+    const p = j1939Pgn(idHex);
+    const d = J1939[p.pgn];
+    if (d) return {
+      name: tr('j1939.pgn' + p.pgn, d.name), source: 'std', detail: tr('an.j1939detail', 'J1939 PGN {pgn} dari alamat {src}', { pgn: p.pgn, src: p.src }),
+      // name tetap (SPN) supaya pilihan graf tidak berubah bila tukar bahasa; label ikut bahasa
+      signals: d.signals.map(s => Object.assign({ id: idHex.toUpperCase(), order: 'intel', signed: false, source: 'std' }, s, { name: 'SPN' + s.spn, label: tr('j1939.spn' + s.spn, s.name) }))
+    };
+    return null;
+  }
+
+  // ---------- Sejarah bingkai per ID ----------
+  class History {
+    constructor(max) { this.max = max || 300; this.ids = new Map(); }
+    add(f) {
+      let e = this.ids.get(f.id);
+      if (!e) { e = { id: f.id, ext: f.ext, frames: [], count: 0, first: f.t }; this.ids.set(f.id, e); }
+      e.count++; e.last = f.t; e.frames.push(f);
+      if (e.frames.length > this.max) e.frames.shift();
+      return e;
+    }
+    clear() { this.ids.clear(); }
+  }
+
+  // ---------- Tekaan dari corak ----------
+  function byteSeries(frames, i) { return frames.map(f => f.data[i]).filter(v => v !== undefined); }
+  function isCounter(s, mask) {
+    if (s.length < 8) return false;
+    let ok = 0;
+    for (let k = 1; k < s.length; k++) {
+      const d = ((s[k] & mask) - (s[k - 1] & mask) + mask + 1) & mask;
+      if (d === 1 || d === 2) ok++;
+    }
+    return ok / (s.length - 1) > 0.9;
+  }
+
+  // Peranan setiap bait: tetap, counter, checksum, analog, bit
+  function byteRoles(frames) {
+    if (!frames.length) return [];
+    const n = Math.max(...frames.map(f => f.data.length));
+    const roles = [];
+    for (let i = 0; i < n; i++) {
+      const s = byteSeries(frames, i);
+      const distinct = new Set(s).size;
+      if (distinct <= 1) { roles.push('tetap'); continue; }
+      if (isCounter(s, 0xff) || isCounter(s, 0x0f) || isCounter(s.map(v => v >> 4), 0x0f)) { roles.push('counter'); continue; }
+      let changes = 0, jump = 0;
+      for (let k = 1; k < s.length; k++) if (s[k] !== s[k - 1]) { changes++; jump += Math.abs(s[k] - s[k - 1]); }
+      const rate = changes / Math.max(1, s.length - 1);
+      const avgJump = changes ? jump / changes : 0;
+      // Berapa bit yang pernah bertukar
+      let toggled = 0; for (let b = 0; b < 8; b++) { const first = (s[0] >> b) & 1; if (s.some(v => ((v >> b) & 1) !== first)) toggled++; }
+      if (i === n - 1 && rate > 0.8 && avgJump > 40 && distinct > s.length * 0.3) { roles.push('checksum'); continue; }
+      if (toggled <= 2 && distinct <= 4) { roles.push('bit'); continue; }
+      roles.push(avgJump > 60 && rate > 0.8 ? 'rawak' : 'analog');
+    }
+    return roles;
+  }
+
+  function guess(entry) {
+    const fr = entry.frames.slice(-300);
+    if (fr.length < 10) return { name: tr('an.collecting', 'Mengumpul data…'), conf: 0, source: 'unk' };
+    const roles = byteRoles(fr);
+    const len = fr[fr.length - 1].data.length;
+    const hz = entry.hz || 0;
+    const detail = [];
+    const counters = roles.filter(r => r === 'counter').length, cks = roles.includes('checksum');
+    if (counters) detail.push(tr('role.counter', 'counter')); if (cks) detail.push(tr('role.checksum', 'checksum'));
+
+    // 4 nilai 16-bit hampir sama => kelajuan roda
+    if (len === 8) {
+      for (const be of [true, false]) {
+        const last = fr.slice(-20);
+        const ok = last.every(f => {
+          const v = [0, 2, 4, 6].map(i => be ? f.data[i] * 256 + f.data[i + 1] : f.data[i + 1] * 256 + f.data[i]);
+          const mx = Math.max(...v), mn = Math.min(...v);
+          return mx > 0 && (mx - mn) / mx < 0.1;
+        });
+        const varies = new Set(fr.map(f => f.data[be ? 1 : 0] + 256 * f.data[be ? 0 : 1])).size > 3;
+        if (ok && varies) return { name: tr('an.wheels', 'Mungkin kelajuan 4 roda (ABS)'), conf: 0.7, source: 'guess', detail: tr('an.wheelsD', '4 nilai 16-bit {e} endian hampir sama', { e: be ? 'big' : 'little' }), roles };
+      }
+    }
+    if (roles.every(r => r === 'tetap')) return { name: tr('an.const', 'Data tetap (status / konfigurasi)'), conf: 0.5, source: 'guess', detail: tr('an.constD', 'tiada bait berubah'), roles };
+    const analog = roles.filter(r => r === 'analog').length, bits = roles.filter(r => r === 'bit').length;
+    if (analog === 0 && bits > 0) return { name: tr('an.switch', 'Mungkin suis / status on-off'), conf: 0.5, source: 'guess', detail: tr('an.switchD', '{n} bait bit', { n: bits }) + (detail.length ? ', ' + detail.join(', ') : ''), roles };
+    // Nilai bertanda di dua bait pertama (sudut stereng biasanya begini)
+    const signedLike = fr.slice(-40).some(f => f.data[1] === 0xFF || f.data[1] >= 0xF0) && fr.slice(-40).some(f => f.data[1] <= 0x0F);
+    if (signedLike && roles[0] === 'analog') return { name: tr('an.steer', 'Mungkin sudut stereng / nilai bertanda'), conf: 0.45, source: 'guess', detail: tr('an.steerD', 'nilai melintasi sifar') + (detail.length ? ', ' + detail.join(', ') : ''), roles };
+    const name = analog ? tr('an.analog', '{n} bait isyarat analog (sensor)', { n: analog }) : tr('an.changing', 'Isyarat berubah');
+    return { name, conf: 0.35, source: 'guess', detail: [hz ? Math.round(hz) + ' Hz' : '', ...detail].filter(Boolean).join(', '), roles };
+  }
+
+  // ---------- Calon isyarat ----------
+  function candidatesFor(len) {
+    const out = [];
+    for (let i = 0; i < len; i++) out.push({ label: 'bait ' + i, start: i * 8, length: 8, order: 'intel', bytes: [i] });
+    for (let i = 0; i + 1 < len; i++) {
+      out.push({ label: 'bait ' + i + '–' + (i + 1) + ' LE', start: i * 8, length: 16, order: 'intel', bytes: [i, i + 1] });
+      out.push({ label: 'bait ' + i + '–' + (i + 1) + ' BE', start: i * 8 + 7, length: 16, order: 'motorola', bytes: [i, i + 1] });
+    }
+    return out;
+  }
+
+  function pearson(x, y) {
+    const n = x.length; if (n < 4) return 0;
+    let sx = 0, sy = 0; for (let i = 0; i < n; i++) { sx += x[i]; sy += y[i]; }
+    const mx = sx / n, my = sy / n; let cov = 0, vx = 0, vy = 0;
+    for (let i = 0; i < n; i++) { const a = x[i] - mx, b = y[i] - my; cov += a * b; vx += a * a; vy += b * b; }
+    if (!vx || !vy) return 0;
+    return cov / Math.sqrt(vx * vy);
+  }
+  function fit(x, y) {
+    const n = x.length; let sx = 0, sy = 0, sxx = 0, sxy = 0;
+    for (let i = 0; i < n; i++) { sx += x[i]; sy += y[i]; sxx += x[i] * x[i]; sxy += x[i] * y[i]; }
+    const d = n * sxx - sx * sx; if (!d) return { scale: 1, offset: 0 };
+    const a = (n * sxy - sx * sy) / d; return { scale: a, offset: (sy - a * sx) / n };
+  }
+  const nice = v => { if (!v) return 0; const p = Math.pow(10, 3 - Math.floor(Math.log10(Math.abs(v)))); return Math.round(v * p) / p; };
+
+  /*
+   * Banding nilai rujukan (PID standard) dengan setiap bait/pasangan bait semua ID.
+   * ref = [{t, v}], hist = History. Pulangkan calon terbaik dengan skala & ofset dipadankan.
+   */
+  function correlate(ref, hist, opts) {
+    opts = Object.assign({ before: 1500, after: 300, top: 5 }, opts);
+    const vals = ref.map(r => r.v);
+    if (ref.length < 6 || Math.max(...vals) - Math.min(...vals) < 1e-9) return { error: tr('an.refFlat', 'Nilai rujukan tidak berubah. Ubah keadaan (contoh tekan pedal) semasa merakam.'), results: [] };
+    const results = [];
+    for (const e of hist.ids.values()) {
+      // padankan setiap titik rujukan dengan bingkai terdekat ID ini
+      const pairs = [];
+      let k = 0;
+      for (const r of ref) {
+        while (k + 1 < e.frames.length && e.frames[k + 1].t <= r.t) k++;
+        let f = e.frames[k];
+        const nx = e.frames[k + 1];
+        if (nx && (!f || f.t > r.t || Math.abs(nx.t - r.t) < Math.abs(f.t - r.t))) f = nx; // bingkai paling hampir masa
+        if (f && f.t <= r.t + opts.after && f.t >= r.t - opts.before) pairs.push({ v: r.v, d: f.data });
+      }
+      if (pairs.length < Math.max(6, ref.length * 0.6)) continue;
+      const len = Math.min(...pairs.map(p => p.d.length));
+      const varies = Array.from({ length: len }, (_, i) => new Set(pairs.map(p => p.d[i])).size > 1);
+      for (const c of candidatesFor(len)) {
+        // calon berbilang bait dengan satu bait tetap sama sahaja dengan calon lebih pendek — langkau
+        if (c.bytes.length > 1 && c.bytes.some(b => !varies[b])) continue;
+        const raw = pairs.map(p => Core.extractSignal(p.d, c));
+        const y = pairs.map(p => p.v);
+        if (new Set(raw).size < 3) continue;
+        const r = pearson(raw, y);
+        if (!isFinite(r) || Math.abs(r) < 0.6) continue;
+        const f = fit(raw, y);
+        results.push({ id: e.id, label: c.label, start: c.start, length: c.length, order: c.order, bytes: c.bytes, r, score: Math.abs(r), scale: nice(f.scale), offset: nice(f.offset), n: pairs.length });
+      }
+    }
+    results.sort((a, b) => b.score - a.score || a.length - b.length);
+    // buang calon bertindih dari ID yang sama (simpan yang terbaik)
+    const out = [];
+    for (const r of results) {
+      if (out.some(o => o.id === r.id && o.bytes.some(b => r.bytes.includes(b)))) continue;
+      out.push(r);
+      if (out.length >= opts.top) break;
+    }
+    return { error: null, results: out };
+  }
+
+  /*
+   * Cari bit yang ikut tindakan pengguna (tekan brek, buka pintu…).
+   * samples = [{ on: bool, f: frame }]
+   */
+  function actionBits(samples, top) {
+    const byId = new Map();
+    for (const s of samples) {
+      let e = byId.get(s.f.id); if (!e) { e = []; byId.set(s.f.id, e); } e.push(s);
+    }
+    const out = [];
+    for (const [id, list] of byId) {
+      const on = list.filter(s => s.on), off = list.filter(s => !s.on);
+      if (on.length < 3 || off.length < 3) continue;
+      const len = Math.min(...list.map(s => s.f.data.length));
+      for (let byte = 0; byte < len; byte++) for (let bit = 0; bit < 8; bit++) {
+        const pOn = on.filter(s => (s.f.data[byte] >> bit) & 1).length / on.length;
+        const pOff = off.filter(s => (s.f.data[byte] >> bit) & 1).length / off.length;
+        const score = Math.abs(pOn - pOff);
+        if (score >= 0.7) out.push({ id, byte, bit, start: byte * 8 + bit, score, activeHigh: pOn > pOff });
+      }
+    }
+    out.sort((a, b) => b.score - a.score);
+    return out.slice(0, top || 8);
+  }
+
+
+  // ---------- Asas (baseline): tunjuk hanya yang berubah ----------
+  // Semasa mengumpul asas, catat bit yang memang berubah-ubah. Selepas itu, mana-mana bit lain yang
+  // berubah, atau ID baru, ditanda "berubah" (melekat sehingga set semula).
+  class Baseline {
+    constructor() { this.ids = new Map(); this.state = 'idle'; this.changes = new Map(); }
+    start() { this.ids.clear(); this.changes.clear(); this.state = 'collect'; }
+    finish() { this.state = this.ids.size ? 'ready' : 'idle'; }
+    reset() { this.ids.clear(); this.changes.clear(); this.state = 'idle'; }
+    add(f) {
+      if (this.state === 'collect') {
+        let b = this.ids.get(f.id);
+        if (!b) { b = { or: f.data.slice(), and: f.data.slice() }; this.ids.set(f.id, b); }
+        f.data.forEach((v, i) => { b.or[i] = (b.or[i] || 0) | v; b.and[i] = b.and[i] === undefined ? v : b.and[i] & v; });
+        return null;
+      }
+      if (this.state !== 'ready') return null;
+      const b = this.ids.get(f.id);
+      let c = this.changes.get(f.id);
+      if (!b) {
+        if (!c) { c = { isNew: true, mask: f.data.map(() => 0xff), t: f.t, count: 0 }; this.changes.set(f.id, c); }
+        c.count++; c.last = f.t;
+        return c;
+      }
+      let hit = false;
+      f.data.forEach((v, i) => {
+        if (b.or[i] === undefined) return;
+        const steady = ~(b.or[i] ^ b.and[i]) & 0xff;          // bit yang tetap semasa asas
+        const diff = (v ^ b.and[i]) & steady;
+        if (diff) {
+          if (!c) { c = { isNew: false, mask: [], t: f.t, count: 0 }; this.changes.set(f.id, c); }
+          c.mask[i] = (c.mask[i] || 0) | diff; hit = true;
+        }
+      });
+      if (hit) { c.count++; c.last = f.t; }
+      return hit ? c : null;
+    }
+  }
+
+  // ---------- Cari nilai yang dilihat di meter ----------
+  const SCALES = [1, 0.1, 0.01, 0.001, 0.5, 0.25, 0.125, 0.05, 0.4, 100 / 255, 0.75, 2, 4, 10];
+  const OFFSETS = [0, -40, -48];
+  function searchCandidates(len) {
+    const out = [];
+    for (const bits of [8, 16, 24, 32]) {
+      const n = bits / 8;
+      for (let i = 0; i + n <= len; i++) {
+        out.push({ bytes: Array.from({ length: n }, (_, k) => i + k), start: i * 8, length: bits, order: 'intel', end: n > 1 ? 'LE' : '' });
+        if (n > 1) out.push({ bytes: Array.from({ length: n }, (_, k) => i + k), start: i * 8 + 7, length: bits, order: 'motorola', end: 'BE' });
+      }
+    }
+    return out;
+  }
+  const keyOf = c => [c.id, c.start, c.length, c.order, c.scale, c.offset].join(':');
+
+  /*
+   * latest = Map id -> data terkini. value = nombor di meter. tol = peratus (0.02 = 2%).
+   * prev = calon carian sebelum ini (tapis: hanya simpan yang masih sepadan dengan nilai baru).
+   * skip = Map id -> peranan bait (abaikan counter/checksum).
+   */
+  function searchValue(latest, value, tol, prev, skip) {
+    const out = [];
+    const ok = (v, scale) => Math.abs(v - value) <= Math.max(Math.abs(value) * tol, scale * 0.51);
+    if (prev) {
+      for (const c of prev) {
+        const d = latest.get(c.id); if (!d) continue;
+        const v = Core.extractSignal(d, c);
+        if (v != null && ok(v, c.scale)) out.push(Object.assign({}, c, { value: v }));
+      }
+      return out;
+    }
+    for (const [id, d] of latest) {
+      const roles = (skip && skip.get(id)) || [];
+      for (const cand of searchCandidates(d.length)) {
+        if (cand.bytes.some(b => roles[b] === 'counter' || roles[b] === 'checksum')) continue;
+        const raw = Core.extractSignal(d, cand);
+        if (raw == null || raw === 0) continue;
+        for (const scale of SCALES) for (const offset of OFFSETS) {
+          const v = raw * scale + offset;
+          if (!ok(v, scale)) continue;
+          const c = Object.assign({ id, scale: Math.round(scale * 1e6) / 1e6, offset, value: Math.round(v * 1e6) / 1e6 }, cand);
+          out.push(c);
+        }
+      }
+    }
+    // Paling munasabah dulu: skala 1 & ofset 0, bit lebih sedikit, nilai paling hampir
+    const cost = c => (c.scale === 1 ? 0 : 1) + (c.offset ? 1 : 0) + c.length / 32 + Math.abs(c.value - value) / Math.max(1, Math.abs(value));
+    out.sort((a, b) => cost(a) - cost(b));
+    return out;
+  }
+
+  const api = { Baseline, searchValue, searchKey: keyOf, J1939, j1939Pgn, standardLabel, History, byteRoles, guess, correlate, actionBits, pearson, candidatesFor };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else root.Analyze = api;
+})(typeof self !== 'undefined' ? self : this);

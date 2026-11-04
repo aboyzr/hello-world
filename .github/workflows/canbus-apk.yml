@@ -1,0 +1,82 @@
+name: Bina APK Aboy Canbus
+
+on:
+  push:
+    branches: [master, ccr-e10f1478-9pxy5o]
+    paths: ['canbus/**', 'android-canbus/**', '.github/workflows/canbus-apk.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Uji penyahkod CAN
+        run: node --test canbus/test/*.test.js
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Masukkan aplikasi web ke dalam APK
+        run: |
+          rm -rf android-canbus/app/src/main/assets
+          mkdir -p android-canbus/app/src/main/assets/canbus
+          cp canbus/*.html canbus/*.js canbus/*.css canbus/*.svg android-canbus/app/src/main/assets/canbus/
+          cp -r canbus/dbc android-canbus/app/src/main/assets/canbus/dbc
+
+      # Kunci tetap dari secret CANBUS_KEYSTORE_B64 + CANBUS_KEYSTORE_PASSWORD (jika ada),
+      # supaya kemas kini boleh dipasang atas versi lama. Jika tiada, kunci sementara dibuat.
+      - name: Sediakan kunci tandatangan
+        env:
+          KS_B64: ${{ secrets.CANBUS_KEYSTORE_B64 }}
+          KS_PASS: ${{ secrets.CANBUS_KEYSTORE_PASSWORD }}
+        run: |
+          KS="$RUNNER_TEMP/canbus.jks"
+          if [ -n "$KS_B64" ] && [ -n "$KS_PASS" ]; then
+            echo "$KS_B64" | base64 -d > "$KS"
+          else
+            KS_PASS="$(openssl rand -hex 16)"
+            keytool -genkeypair -keystore "$KS" -storepass "$KS_PASS" -keypass "$KS_PASS" \
+              -alias aboy -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Aboy Canbus, L=Kuala Kangsar, ST=Perak, C=MY"
+            echo "::warning::Tiada secret CANBUS_KEYSTORE_B64 - guna kunci sementara"
+          fi
+          echo "::add-mask::$KS_PASS"
+          echo "KEYSTORE_FILE=$KS" >> "$GITHUB_ENV"
+          echo "KEYSTORE_PASSWORD=$KS_PASS" >> "$GITHUB_ENV"
+
+      - name: Bina APK
+        working-directory: android-canbus
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk ../AboyCanbus.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AboyCanbus-apk
+          path: AboyCanbus.apk
+
+      # Tag tetap "canbus" supaya link muat turun tidak berubah, dan tidak ganggu release Aboy Workshop
+      - name: Terbitkan di Releases
+        if: github.ref == 'refs/heads/master'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view canbus >/dev/null 2>&1 || \
+            gh release create canbus --title "Aboy Canbus" --latest=false \
+              --notes "Muat turun AboyCanbus.apk di bawah dan buka di telefon Android untuk pasang."
+          gh release upload canbus AboyCanbus.apk --clobber
+          gh release edit canbus --title "Aboy Canbus v1.0.${{ github.run_number }}"

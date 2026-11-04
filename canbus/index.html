@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0d1218">
+  <title>Aboy Canbus</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header class="top">
+    <h1>Aboy Canbus</h1>
+    <div class="top-right">
+      <span class="pill" id="pill"></span>
+      <div class="lang" role="group" aria-label="Language / Bahasa">
+        <button type="button" data-lang="en" aria-pressed="true">EN</button>
+        <button type="button" data-lang="ms" aria-pressed="false">BM</button>
+      </div>
+    </div>
+  </header>
+  <p class="status" id="status" hidden></p>
+
+  <main>
+    <!-- ============ GRAPH ============ -->
+    <section class="view" id="view-graf" hidden>
+      <div class="bar">
+        <button class="btn primary" id="btnGraf"></button>
+        <button class="btn" id="btnPickSig" data-i18n="graph.pick"></button>
+        <span class="sub" id="grafRate"></span>
+      </div>
+      <div id="charts"></div>
+      <p class="empty" id="grafEmpty" data-i18n-html="graph.empty"></p>
+    </section>
+
+    <!-- ============ SNIFF ============ -->
+    <section class="view" id="view-sniff" hidden>
+      <div class="bar">
+        <button class="btn primary" id="btnSniff"></button>
+        <button class="btn" id="btnRec"></button>
+        <button class="btn" id="btnCsv" disabled data-i18n="sniff.csv"></button>
+      </div>
+      <div class="bar base-bar">
+        <button class="btn" id="btnBase"></button>
+        <button class="btn" id="btnOnlyChg" aria-pressed="false" data-i18n="base.only"></button>
+        <span class="sub" id="baseInfo" data-i18n="base.intro"></span>
+      </div>
+      <div class="bar">
+        <label class="field inline" for="filtId"><span data-i18n="sniff.filter"></span><input id="filtId" data-i18n-ph="sniff.filterPh" maxlength="8" autocapitalize="characters"></label>
+        <label class="field inline" for="filtMask"><span data-i18n="sniff.mask"></span><input id="filtMask" placeholder="7FF" maxlength="8" autocapitalize="characters"></label>
+      </div>
+      <p class="sub" id="sniffStats" data-i18n="sniff.intro"></p>
+      <div class="sniff" id="sniffTable"></div>
+      <p class="legend sub"><i class="r-counter"></i><span data-i18n="role.counter"></span> <i class="r-checksum"></i><span data-i18n="role.checksum"></span> <i class="r-analog"></i><span data-i18n="role.analog"></span> <i class="r-bit"></i><span data-i18n="role.bit"></span> <i class="r-tetap"></i><span data-i18n="role.const"></span></p>
+    </section>
+
+    <!-- ============ IDs ============ -->
+    <section class="view" id="view-ids" hidden>
+      <div class="bar">
+        <label class="field inline" for="profileSel"><span data-i18n="ids.profile"></span><select id="profileSel"></select></label>
+        <button class="btn" id="btnNewProfile" data-i18n="ids.newProfile"></button>
+      </div>
+      <div class="bar">
+        <label class="btn" for="dbcFile" data-i18n="ids.import"></label>
+        <input type="file" id="dbcFile" accept=".dbc,text/plain" hidden>
+        <button class="btn" id="btnExportDbc" data-i18n="ids.export"></button>
+        <button class="btn" id="btnDemoDbc" hidden data-i18n="ids.demoDbc"></button>
+      </div>
+      <section class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <h2 style="margin:0" data-i18n="mod.title"></h2>
+          <button class="btn small" id="btnScanMod"></button>
+        </div>
+        <p class="sub" data-i18n="mod.intro"></p>
+        <div id="modList"></div>
+      </section>
+      <div class="chips" id="modFilter"></div>
+      <p class="sub" id="idsStats"></p>
+      <div id="idList"></div>
+    </section>
+
+    <!-- ============ LEARN ============ -->
+    <section class="view" id="view-learn" hidden>
+      <section class="card resume" id="resumeCard" hidden>
+        <h2 data-i18n="resume.title"></h2>
+        <p class="sub" id="resumeText"></p>
+        <div class="bar">
+          <button class="btn primary" id="btnResume" data-i18n="resume.continue"></button>
+          <button class="btn" id="btnResumeView" data-i18n="resume.view"></button>
+          <button class="btn danger" id="btnResumeDrop" data-i18n="resume.drop"></button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <h2 style="margin:0" data-i18n="auto.title"></h2>
+          <button class="btn small" id="btnAuto" aria-pressed="false"></button>
+        </div>
+        <p class="sub" data-i18n="auto.intro"></p>
+        <p class="sub" id="autoInfo"></p>
+        <div id="autoResults"></div>
+      </section>
+
+      <section class="card">
+        <h2 data-i18n="learn.pidTitle"></h2>
+        <p class="sub" data-i18n="learn.pidIntro"></p>
+        <label class="field" for="learnPid"><span data-i18n="learn.ref"></span><select id="learnPid"></select></label>
+        <p class="hint" id="learnHint"></p>
+        <div class="bar">
+          <button class="btn primary" id="btnLearn"></button>
+          <span class="sub" id="learnInfo"></span>
+        </div>
+        <div class="big-ref" id="learnRef" hidden></div>
+        <div id="learnResults"></div>
+      </section>
+
+      <section class="card">
+        <h2 data-i18n="find.title"></h2>
+        <p class="sub" data-i18n="find.intro"></p>
+        <div class="two">
+          <label class="field" for="findVal"><span data-i18n="find.value"></span><input id="findVal" type="number" step="any" inputmode="decimal" data-i18n-ph="find.valuePh"></label>
+          <label class="field" for="findTol"><span data-i18n="find.tol"></span>
+            <select id="findTol"><option value="0.0005">±0.05%</option><option value="0.01" selected>±1%</option><option value="0.03">±3%</option><option value="0.08">±8%</option></select>
+          </label>
+        </div>
+        <div class="bar">
+          <button class="btn primary" id="btnFind" data-i18n="find.search"></button>
+          <button class="btn" id="btnFindAgain" disabled data-i18n="find.again"></button>
+          <button class="btn" id="btnFindReset" disabled data-i18n="find.reset"></button>
+        </div>
+        <p class="sub" id="findInfo"></p>
+        <div id="findResults"></div>
+      </section>
+
+      <section class="card">
+        <h2 data-i18n="act.title"></h2>
+        <p class="sub" data-i18n-html="act.intro"></p>
+        <label class="field" for="actName"><span data-i18n="act.name"></span><input id="actName" data-i18n-ph="act.namePh"></label>
+        <div class="bar">
+          <button class="btn primary" id="btnAct"></button>
+          <button class="btn big-toggle" id="btnActOn" disabled></button>
+        </div>
+        <p class="sub" id="actInfo"></p>
+        <div id="actResults"></div>
+      </section>
+    </section>
+
+    <!-- ============ SEND (ECU aftermarket / bench) ============ -->
+    <section class="view" id="view-send" hidden>
+      <section class="card warn-card">
+        <h2 data-i18n="send.title"></h2>
+        <p class="sub" data-i18n-html="send.intro"></p>
+        <ul class="safe" id="sendSafe"></ul>
+        <label class="chk"><input type="checkbox" id="sendAck"><span data-i18n="send.ack"></span></label>
+      </section>
+      <section class="card">
+        <div class="chips" role="group" aria-label="Mode">
+          <button class="chip" id="mOnce" data-mode="once" aria-pressed="true" data-i18n="send.mOnce"></button>
+          <button class="chip" id="mRepeat" data-mode="repeat" aria-pressed="false" data-i18n="send.mRepeat"></button>
+          <button class="chip" id="mSeq" data-mode="seq" aria-pressed="false" data-i18n="send.mSeq"></button>
+        </div>
+
+        <div id="singlePane">
+          <label class="field" for="sendId"><span data-i18n="send.id"></span><input id="sendId" placeholder="5A0" maxlength="8" autocapitalize="characters"></label>
+          <label class="field" for="sendData"><span data-i18n="send.data"></span><input id="sendData" placeholder="01 00 00 00 00 00 00 00" class="mono" autocapitalize="characters"></label>
+          <label class="field" for="sendHz" id="rateField" hidden><span data-i18n="send.rate"></span>
+            <select id="sendHz"><option value="5">5 Hz</option><option value="10" selected>10 Hz</option><option value="20">20 Hz</option><option value="50">50 Hz</option><option value="100">100 Hz</option></select>
+          </label>
+        </div>
+
+        <div id="seqPane" hidden>
+          <label class="field" for="seqText"><span data-i18n="send.seqData"></span><textarea id="seqText" rows="5" class="mono" placeholder="320 00 1F 56 00&#10;329 40 94 00 00&#10;5A0 01 00" data-i18n-ph="send.seqPh"></textarea></label>
+          <div class="two">
+            <label class="field" for="seqGap"><span data-i18n="send.gap"></span><input id="seqGap" type="number" min="0" value="20" inputmode="numeric"></label>
+            <label class="field" for="seqLoop"><span data-i18n="send.loop"></span><select id="seqLoop"><option value="" data-i18n="common.no"></option><option value="1" data-i18n="common.yes"></option></select></label>
+          </div>
+          <button class="btn small" id="btnSeqLoad" data-i18n="send.loadRec"></button>
+        </div>
+
+        <div class="bar">
+          <button class="btn primary" id="btnSend" disabled></button>
+          <button class="btn danger big-toggle" id="btnSendStop" hidden data-i18n="send.stopAll"></button>
+        </div>
+        <p class="sub" id="sendInfo"></p>
+      </section>
+    </section>
+
+    <!-- ============ CONNECT ============ -->
+    <section class="view" id="view-conn">
+      <section class="card">
+        <h2 data-i18n="conn.title"></h2>
+        <ol class="steps sub">
+          <li data-i18n-html="conn.step1"></li>
+          <li data-i18n-html="conn.step2"></li>
+          <li data-i18n-html="conn.step3"></li>
+        </ol>
+        <div class="bar">
+          <button class="btn primary" id="btnList" data-i18n="conn.list"></button>
+          <button class="btn" id="btnScanBle" data-i18n="conn.scanBle"></button>
+          <button class="btn" id="btnDemo" data-i18n="conn.demo"></button>
+        </div>
+        <div class="bar" id="webBtns" hidden>
+          <button class="btn" id="btnWebBle" data-i18n="conn.webBle"></button>
+          <button class="btn" id="btnSerial" data-i18n="conn.serial"></button>
+        </div>
+        <ul class="list" id="devList"></ul>
+        <label class="field" for="protoSel"><span data-i18n="conn.protocol"></span>
+          <select id="protoSel">
+            <option value="0" data-i18n="proto.auto"></option>
+            <option value="6" data-i18n="proto.6"></option>
+            <option value="7" data-i18n="proto.7"></option>
+            <option value="8" data-i18n="proto.8"></option>
+            <option value="9" data-i18n="proto.9"></option>
+          </select>
+        </label>
+      </section>
+
+      <section class="card" id="infoCard" hidden>
+        <h2 data-i18n="conn.testTitle"></h2>
+        <dl class="kv" id="infoList"></dl>
+        <button class="btn danger" id="btnDisconnect" data-i18n="conn.disconnect"></button>
+      </section>
+
+      <details class="card">
+        <summary data-i18n="term.title"></summary>
+        <form class="bar" id="termForm">
+          <input id="termIn" data-i18n-ph="term.ph" autocapitalize="characters" autocomplete="off" aria-label="Command">
+          <button class="btn primary" data-i18n="term.send"></button>
+        </form>
+        <pre class="term" id="termOut"></pre>
+      </details>
+    </section>
+  </main>
+
+  <nav class="tabbar" aria-label="Menu">
+    <button data-tab="graf"><svg viewBox="0 0 24 24"><path d="M3 20h18M4 16l4-6 4 3 4-8 4 5"/></svg><span data-i18n="tab.graf"></span></button>
+    <button data-tab="sniff"><svg viewBox="0 0 24 24"><path d="M3 12h3l2-6 4 12 2-6h7"/></svg><span data-i18n="tab.sniff"></span></button>
+    <button data-tab="ids"><svg viewBox="0 0 24 24"><path d="M4 4h7l9 9-7 7-9-9zM8 8h.01"/></svg><span data-i18n="tab.ids"></span></button>
+    <button data-tab="learn"><svg viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0-4 10.5V17h8v-3.5A6 6 0 0 0 12 3zM9 21h6"/></svg><span data-i18n="tab.learn"></span></button>
+    <button data-tab="send"><svg viewBox="0 0 24 24"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/></svg><span data-i18n="tab.send"></span></button>
+    <button class="on" data-tab="conn"><svg viewBox="0 0 24 24"><path d="m7 7 10 10-5 5V2l5 5L7 17"/></svg><span data-i18n="tab.conn"></span></button>
+  </nav>
+
+  <dialog id="sigDlg">
+    <form method="dialog" class="dlg">
+      <h2 data-i18n="pick.title"></h2>
+      <p class="sub" data-i18n="pick.intro"></p>
+      <div class="pick" id="sigPick"></div>
+      <div class="bar end"><button class="btn primary" value="ok" data-i18n="common.done"></button></div>
+    </form>
+  </dialog>
+
+  <dialog id="idDlg">
+    <form method="dialog" class="dlg" id="idForm">
+      <h2 id="idDlgTitle">ID</h2>
+      <p class="mono sub" id="idDlgRaw"></p>
+      <div class="bytes" id="idBytes"></div>
+      <p class="sub" data-i18n="bytes.help"></p>
+      <label class="field" for="idName"><span data-i18n="dlg.name"></span><input id="idName" name="name" data-i18n-ph="dlg.namePh"></label>
+      <label class="field" for="idModule"><span data-i18n="dlg.module"></span><select id="idModule"></select></label>
+      <h3 class="sec" data-i18n="dlg.signals"></h3>
+      <ul class="list" id="idSigs"></ul>
+      <label class="field" for="idNote"><span data-i18n="dlg.note"></span><textarea id="idNote" rows="2" data-i18n-ph="dlg.notePh"></textarea></label>
+      <details class="add-sig">
+        <summary data-i18n="dlg.addManual"></summary>
+        <div class="two">
+          <label class="field" for="sgName"><span data-i18n="dlg.sgName"></span><input id="sgName" data-i18n-ph="dlg.sgNamePh"></label>
+          <label class="field" for="sgUnit"><span data-i18n="dlg.unit"></span><input id="sgUnit" placeholder="%"></label>
+        </div>
+        <div class="two">
+          <label class="field" for="sgStart"><span data-i18n="dlg.start"></span><input id="sgStart" type="number" min="0" max="63" value="16"></label>
+          <label class="field" for="sgLen"><span data-i18n="dlg.len"></span><input id="sgLen" type="number" min="1" max="32" value="8"></label>
+        </div>
+        <div class="two">
+          <label class="field" for="sgOrder"><span data-i18n="dlg.order"></span><select id="sgOrder"><option value="intel" data-i18n="dlg.intel"></option><option value="motorola" data-i18n="dlg.motorola"></option></select></label>
+          <label class="field" for="sgSigned"><span data-i18n="dlg.signed"></span><select id="sgSigned"><option value="" data-i18n="common.no"></option><option value="1" data-i18n="common.yes"></option></select></label>
+        </div>
+        <div class="two">
+          <label class="field" for="sgScale"><span data-i18n="dlg.scale"></span><input id="sgScale" type="number" step="any" value="1"></label>
+          <label class="field" for="sgOffset"><span data-i18n="dlg.offset"></span><input id="sgOffset" type="number" step="any" value="0"></label>
+        </div>
+        <p class="sub" data-i18n="dlg.formulaHelp"></p>
+        <button class="btn" type="button" id="btnAddSig" data-i18n="dlg.addSig"></button>
+      </details>
+      <div class="bar end">
+        <button class="btn danger" type="button" id="btnDelLabel" data-i18n="dlg.delete"></button>
+        <button class="btn" type="button" onclick="this.closest('dialog').close('cancel')" data-i18n="common.close"></button>
+        <button class="btn primary" value="ok" data-i18n="common.save"></button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="askDlg">
+    <form method="dialog" class="dlg">
+      <h2 id="askTitle"></h2>
+      <p class="sub" id="askText"></p>
+      <input id="askInput" hidden aria-label="Answer">
+      <div class="bar end"><button class="btn" type="button" onclick="this.closest('dialog').close('no')" data-i18n="common.cancel"></button><button class="btn primary" value="yes" id="askOk">OK</button></div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="i18n.js"></script>
+  <script src="can-core.js"></script>
+  <script src="analyze.js"></script>
+  <script src="dbc.js"></script>
+  <script src="elm327.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
