@@ -280,6 +280,22 @@ function autofill(field) {
 $('fPlate').onchange = () => { $('fPlate').value = $('fPlate').value.toUpperCase(); autofill('fPlate'); };
 $('fCust').onchange = () => autofill('fCust');
 
+// Pilih pelanggan dari contact telefon
+const contactSupported = !!(NATIVE && NATIVE.pickContact) || ('contacts' in navigator && 'ContactsManager' in window);
+$('pickContact').hidden = !contactSupported;
+window.onContactPicked = (name, tel) => {
+  if (tel) $('fPhone').value = String(tel).trim();
+  if (name && !$('fCust').value.trim()) $('fCust').value = String(name).trim();
+  if (name || tel) autofill('fCust');
+};
+$('pickContact').onclick = async () => {
+  if (NATIVE && NATIVE.pickContact) { NATIVE.pickContact(); return; }
+  try {
+    const [c] = await navigator.contacts.select(['name', 'tel'], { multiple: false });
+    if (c) window.onContactPicked(c.name && c.name[0], c.tel && c.tel[0]);
+  } catch (e) { /* dibatalkan */ }
+};
+
 function openSaleForm(s = null) {
   editingSale = s;
   $('saleTitle').textContent = s ? 'Ubah ' + s.no : 'Resit Pelanggan Baru';

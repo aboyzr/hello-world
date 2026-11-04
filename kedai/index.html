@@ -152,7 +152,12 @@
         </div>
         <div class="two">
           <label class="field">Nama pelanggan <input id="fCust" list="dlCusts" autocomplete="off" maxlength="60"></label>
-          <label class="field">No. telefon <input id="fPhone" inputmode="tel" autocomplete="off" maxlength="20" placeholder="012-3456789"></label>
+          <div class="field"><label for="fPhone">No. telefon</label>
+            <div class="with-btn">
+              <input id="fPhone" inputmode="tel" autocomplete="off" maxlength="20" placeholder="012-3456789">
+              <button type="button" class="pick-btn" id="pickContact" aria-label="Pilih dari contact telefon">📇</button>
+            </div>
+          </div>
         </div>
 
         <p class="label">Item / kerja <span class="sub">· kuantiti × harga seunit (RM)</span></p>
