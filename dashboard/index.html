@@ -1,63 +1,121 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="ms">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0b1016">
   <meta name="mobile-web-app-capable" content="yes">
-  <title>Dash Android</title>
+  <title>Akaun Kedai</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
   <header class="top">
-    <div>
-      <p class="greet" id="greet">Halo</p>
-      <h1 class="clock" id="clock">--:--</h1>
-      <p class="date" id="date"></p>
+    <div class="shop">
+      <button class="shop-name" id="shopName" aria-label="Tukar nama kedai">Workshop Saya</button>
+      <p class="today" id="today"></p>
     </div>
-    <button class="icon-btn" id="themeBtn" aria-label="Ganti tema">◐</button>
+    <button class="icon-btn" id="themeBtn" aria-label="Tukar tema">◐</button>
   </header>
 
+  <nav class="month" aria-label="Pilih bulan">
+    <button class="icon-btn" id="prevMonth" aria-label="Bulan sebelum">‹</button>
+    <strong id="monthLabel"></strong>
+    <button class="icon-btn" id="nextMonth" aria-label="Bulan seterusnya">›</button>
+  </nav>
+
   <main class="grid">
-    <section class="card stat">
-      <h2>Baterai</h2>
-      <p class="big" id="batt">—</p>
-      <div class="bar"><span id="battBar"></span></div>
-      <p class="sub" id="battSub">Memeriksa…</p>
+    <section class="card wide hero">
+      <h2>Untung bersih bulan ini</h2>
+      <p class="hero-num" id="profit">RM0.00</p>
+      <p class="sub" id="profitSub"></p>
     </section>
 
-    <section class="card stat">
-      <h2>Jaringan</h2>
-      <p class="big" id="net">—</p>
-      <p class="sub" id="netSub"></p>
+    <section class="card">
+      <h2><i class="dot in"></i>Duit masuk</h2>
+      <p class="big" id="totIn">RM0.00</p>
+      <p class="sub" id="cntIn"></p>
+    </section>
+    <section class="card">
+      <h2><i class="dot out"></i>Duit keluar</h2>
+      <p class="big" id="totOut">RM0.00</p>
+      <p class="sub" id="cntOut"></p>
+    </section>
+
+    <section class="card wide todaybox">
+      <h2>Hari ini</h2>
+      <div class="today-row">
+        <div><span class="sub">Masuk</span><b id="dayIn">RM0.00</b></div>
+        <div><span class="sub">Keluar</span><b id="dayOut">RM0.00</b></div>
+        <div><span class="sub">Untung</span><b id="dayNet">RM0.00</b></div>
+      </div>
     </section>
 
     <section class="card wide">
-      <h2>Perangkat</h2>
-      <dl class="info" id="device"></dl>
+      <div class="tabs" role="tablist">
+        <button role="tab" class="tab on" data-kind="out">Belanja ikut kategori</button>
+        <button role="tab" class="tab" data-kind="in">Pendapatan ikut kategori</button>
+      </div>
+      <ul class="bars" id="bars"></ul>
     </section>
 
     <section class="card wide">
       <div class="row">
-        <h2>Tugas</h2>
-        <span class="pill" id="todoCount">0</span>
+        <h2>Senarai transaksi</h2>
+        <input type="search" id="search" placeholder="Cari nota / no. plat…" aria-label="Cari">
       </div>
-      <form id="todoForm" class="add">
-        <input id="todoInput" placeholder="Tambah tugas…" autocomplete="off" maxlength="120">
-        <button type="submit" aria-label="Tambah">＋</button>
-      </form>
-      <ul id="todoList" class="todos"></ul>
+      <div id="txList"></div>
     </section>
 
     <section class="card wide">
-      <h2>Catatan</h2>
-      <textarea id="notes" placeholder="Tulis catatan cepat… (tersimpan otomatis)"></textarea>
+      <h2>Backup &amp; eksport</h2>
+      <p class="sub note">Data disimpan dalam telefon ini sahaja. Buat backup selalu supaya tak hilang kalau tukar telefon atau padam data browser.</p>
+      <div class="tools">
+        <button class="ghost" id="exportCsv">Eksport CSV (Excel)</button>
+        <button class="ghost" id="backup">Simpan backup</button>
+        <label class="ghost" for="restore">Pulih backup</label>
+        <input type="file" id="restore" accept="application/json,.json" hidden>
+      </div>
     </section>
   </main>
 
-  <button class="install" id="installBtn" hidden>Pasang ke layar utama</button>
+  <div class="actions">
+    <button class="act in" data-open="in">＋ Duit Masuk</button>
+    <button class="act out" data-open="out">− Duit Keluar</button>
+  </div>
+
+  <dialog id="sheet">
+    <form id="txForm" method="dialog">
+      <h3 id="sheetTitle">Duit Masuk</h3>
+      <label class="amount">
+        <span>RM</span>
+        <input id="amt" inputmode="decimal" placeholder="0.00" required autocomplete="off">
+      </label>
+      <p class="label">Kategori</p>
+      <div class="chips" id="cats"></div>
+      <label class="field">Nota <span class="sub">(nama pelanggan, no. plat, barang)</span>
+        <input id="note" maxlength="120" autocomplete="off" placeholder="cth: WXY 1234 tukar minyak hitam">
+      </label>
+      <div class="two">
+        <label class="field">Tarikh <input type="date" id="date" required></label>
+        <label class="field">Cara bayar
+          <select id="pay">
+            <option>Tunai</option>
+            <option>Online / QR</option>
+            <option>Kad</option>
+            <option>Hutang</option>
+          </select>
+        </label>
+      </div>
+      <div class="sheet-btns">
+        <button type="button" class="ghost" id="cancel">Batal</button>
+        <button type="submit" class="primary" id="save">Simpan</button>
+      </div>
+    </form>
+  </dialog>
+
+  <button class="install" id="installBtn" hidden>Pasang ke skrin utama</button>
 
   <script src="app.js"></script>
 </body>

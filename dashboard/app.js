@@ -6,9 +6,27 @@ const store = {
     catch { return fallback; }
   },
   set(key, value) {
-    try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+    try { localStorage.setItem(key, JSON.stringify(value)); }
+    catch { alert('Gagal simpan data. Ruang storan mungkin penuh.'); }
   }
 };
+
+const CATS = {
+  in: ['Upah servis', 'Jual alat ganti', 'Repair / baiki', 'Cuci / polish', 'Lain-lain'],
+  out: ['Beli stok / alat ganti', 'Gaji pekerja', 'Sewa kedai', 'Bil elektrik / air', 'Peralatan', 'Minyak / pengangkutan', 'Lain-lain']
+};
+const BAR_COLOR = { in: 'var(--in)', out: 'var(--out)' };
+
+/* Amaun disimpan dalam sen (integer) supaya kira tepat */
+const fmt = sen => (sen < 0 ? '-' : '') + 'RM' + (Math.abs(sen) / 100).toLocaleString('ms-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const pad = n => String(n).padStart(2, '0');
+const isoDate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const monthKey = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+
+let txs = store.get('txs', []);
+let view = new Date(); view.setDate(1);
+let barKind = 'out';
+const save = () => { store.set('txs', txs); render(); };
 
 /* Tema */
 function applyTheme(t) {
@@ -18,140 +36,196 @@ function applyTheme(t) {
 applyTheme(store.get('theme', 'dark'));
 $('themeBtn').onclick = () => {
   const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
-  store.set('theme', next);
-  applyTheme(next);
+  store.set('theme', next); applyTheme(next);
 };
 
-/* Jam & tanggal */
-function tick() {
+/* Nama kedai */
+$('shopName').textContent = store.get('shop', 'Workshop Saya');
+$('shopName').onclick = () => {
+  const n = prompt('Nama kedai:', $('shopName').textContent);
+  if (n && n.trim()) { store.set('shop', n.trim()); $('shopName').textContent = n.trim(); }
+};
+
+/* Bulan */
+$('prevMonth').onclick = () => { view.setMonth(view.getMonth() - 1); render(); };
+$('nextMonth').onclick = () => { view.setMonth(view.getMonth() + 1); render(); };
+
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === t));
+  barKind = t.dataset.kind; renderBars();
+});
+$('search').oninput = () => renderList();
+
+function sum(list, kind) { return list.filter(t => t.kind === kind).reduce((a, t) => a + t.amt, 0); }
+function monthTx() { const k = monthKey(view); return txs.filter(t => t.date.startsWith(k)); }
+
+function render() {
   const now = new Date();
-  const h = now.getHours();
-  $('clock').textContent = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-  $('date').textContent = now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  $('greet').textContent = h < 11 ? 'Selamat pagi' : h < 15 ? 'Selamat siang' : h < 19 ? 'Selamat sore' : 'Selamat malam';
-}
-tick();
-setInterval(tick, 1000);
+  $('today').textContent = now.toLocaleDateString('ms-MY', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  $('monthLabel').textContent = view.toLocaleDateString('ms-MY', { month: 'long', year: 'numeric' });
 
-/* Baterai (didukung Chrome Android) */
-if (navigator.getBattery) {
-  navigator.getBattery().then(b => {
-    const update = () => {
-      const pct = Math.round(b.level * 100);
-      $('batt').textContent = pct + '%';
-      const bar = $('battBar');
-      bar.style.width = pct + '%';
-      bar.style.background = b.charging || pct > 30 ? 'var(--accent)' : pct > 15 ? 'var(--warn)' : 'var(--bad)';
-      $('battSub').textContent = b.charging ? '⚡ Sedang mengisi' : 'Tidak mengisi';
+  const m = monthTx();
+  const tin = sum(m, 'in'), tout = sum(m, 'out'), net = tin - tout;
+  $('totIn').textContent = fmt(tin);
+  $('totOut').textContent = fmt(tout);
+  $('cntIn').textContent = m.filter(t => t.kind === 'in').length + ' rekod';
+  $('cntOut').textContent = m.filter(t => t.kind === 'out').length + ' rekod';
+  $('profit').textContent = fmt(net);
+  $('profit').classList.toggle('neg', net < 0);
+  const debt = m.filter(t => t.kind === 'in' && t.pay === 'Hutang').reduce((a, t) => a + t.amt, 0);
+  $('profitSub').textContent = (tin ? `Margin ${Math.round(net / tin * 100)}%` : 'Belum ada duit masuk')
+    + (debt ? ` · Hutang pelanggan ${fmt(debt)}` : '');
+
+  const d = txs.filter(t => t.date === isoDate(now));
+  const din = sum(d, 'in'), dout = sum(d, 'out');
+  $('dayIn').textContent = fmt(din);
+  $('dayOut').textContent = fmt(dout);
+  $('dayNet').textContent = fmt(din - dout);
+
+  renderBars(); renderList();
+}
+
+function renderBars() {
+  const m = monthTx().filter(t => t.kind === barKind);
+  const total = m.reduce((a, t) => a + t.amt, 0);
+  const by = {};
+  m.forEach(t => by[t.cat] = (by[t.cat] || 0) + t.amt);
+  const rows = Object.entries(by).sort((a, b) => b[1] - a[1]);
+  const max = rows.length ? rows[0][1] : 1;
+  const ul = $('bars'); ul.innerHTML = '';
+  if (!rows.length) {
+    ul.innerHTML = `<li class="empty">Tiada ${barKind === 'in' ? 'pendapatan' : 'belanja'} bulan ini.</li>`;
+    return;
+  }
+  rows.forEach(([cat, v]) => {
+    const li = document.createElement('li');
+    const name = document.createElement('span'); name.textContent = cat;
+    const val = document.createElement('span'); val.className = 'val';
+    val.innerHTML = `${fmt(v)}<span class="pct">${Math.round(v / total * 100)}%</span>`;
+    const track = document.createElement('div'); track.className = 'track';
+    const fill = document.createElement('div'); fill.className = 'fill';
+    fill.style.width = Math.max(2, v / max * 100) + '%';
+    fill.style.background = BAR_COLOR[barKind];
+    track.append(fill);
+    li.title = `${cat}: ${fmt(v)}`;
+    li.append(name, val, track);
+    ul.append(li);
+  });
+}
+
+function renderList() {
+  const q = $('search').value.trim().toLowerCase();
+  const m = monthTx()
+    .filter(t => !q || (t.note + ' ' + t.cat).toLowerCase().includes(q))
+    .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+  const box = $('txList'); box.innerHTML = '';
+  if (!m.length) {
+    box.innerHTML = `<p class="empty">${q ? 'Tiada padanan.' : 'Belum ada transaksi bulan ini. Tekan butang di bawah untuk tambah.'}</p>`;
+    return;
+  }
+  let cur = null;
+  m.forEach(t => {
+    if (t.date !== cur) {
+      cur = t.date;
+      const day = m.filter(x => x.date === cur);
+      const h = document.createElement('div'); h.className = 'day-h';
+      const dl = new Date(cur + 'T00:00').toLocaleDateString('ms-MY', { weekday: 'short', day: 'numeric', month: 'short' });
+      h.innerHTML = `<span>${dl}</span><span>Untung ${fmt(sum(day, 'in') - sum(day, 'out'))}</span>`;
+      box.append(h);
+    }
+    const row = document.createElement('div'); row.className = 'tx';
+    const info = document.createElement('div');
+    const t1 = document.createElement('div'); t1.className = 't1'; t1.textContent = t.cat;
+    const tag = document.createElement('span'); tag.className = 'tag' + (t.pay === 'Hutang' ? ' debt' : ''); tag.textContent = t.pay;
+    t1.append(tag);
+    const t2 = document.createElement('div'); t2.className = 't2'; t2.textContent = t.note || '—';
+    info.append(t1, t2);
+    const amt = document.createElement('div'); amt.className = 'amt ' + t.kind;
+    amt.textContent = (t.kind === 'in' ? '+' : '−') + fmt(t.amt);
+    const del = document.createElement('button'); del.className = 'del'; del.textContent = '×';
+    del.setAttribute('aria-label', 'Padam');
+    del.onclick = () => {
+      if (confirm(`Padam ${t.cat} ${fmt(t.amt)}?`)) { txs = txs.filter(x => x.id !== t.id); save(); }
     };
-    update();
-    ['levelchange', 'chargingchange'].forEach(ev => b.addEventListener(ev, update));
-  });
-} else {
-  $('battSub').textContent = 'Tidak didukung browser ini';
-}
-
-/* Jaringan */
-function updateNet() {
-  const c = navigator.connection;
-  $('net').textContent = navigator.onLine ? 'Online' : 'Offline';
-  $('net').style.color = navigator.onLine ? 'var(--accent)' : 'var(--bad)';
-  const parts = [];
-  if (c) {
-    if (c.type) parts.push(c.type === 'wifi' ? 'Wi-Fi' : c.type === 'cellular' ? 'Seluler' : c.type);
-    if (c.effectiveType) parts.push(c.effectiveType.toUpperCase());
-    if (c.downlink) parts.push(c.downlink + ' Mbps');
-    if (c.saveData) parts.push('Hemat data');
-  }
-  $('netSub').textContent = parts.join(' · ');
-}
-updateNet();
-addEventListener('online', updateNet);
-addEventListener('offline', updateNet);
-navigator.connection?.addEventListener('change', updateNet);
-
-/* Info perangkat */
-function updateDevice() {
-  const ua = navigator.userAgent;
-  const android = ua.match(/Android\s([\d.]+)/);
-  const model = ua.match(/Android[^;]*;\s*([^;)]+?)(?:\sBuild|\))/);
-  const rows = [
-    ['Sistem', android ? 'Android ' + android[1] : navigator.platform || '—'],
-    ['Model', model && model[1] !== 'K' ? model[1] : '—'],
-    ['Layar', `${screen.width}×${screen.height} @${devicePixelRatio}x`],
-    ['CPU', navigator.hardwareConcurrency ? navigator.hardwareConcurrency + ' core' : '—'],
-    ['RAM', navigator.deviceMemory ? '≥ ' + navigator.deviceMemory + ' GB' : '—'],
-    ['Bahasa', navigator.language]
-  ];
-  $('device').innerHTML = '';
-  rows.forEach(([k, v]) => {
-    const dt = document.createElement('dt'); dt.textContent = k;
-    const dd = document.createElement('dd'); dd.textContent = v;
-    $('device').append(dt, dd);
+    row.append(info, amt, del);
+    box.append(row);
   });
 }
-updateDevice();
-addEventListener('resize', updateDevice);
 
-/* Tugas */
-let todos = store.get('todos', []);
-function renderTodos() {
-  const list = $('todoList');
-  list.innerHTML = '';
-  if (!todos.length) {
-    const li = document.createElement('li');
-    li.className = 'empty';
-    li.textContent = 'Belum ada tugas.';
-    list.append(li);
-  }
-  todos.forEach((t, i) => {
-    const li = document.createElement('li');
-    if (t.done) li.className = 'done';
-    const cb = document.createElement('input');
-    cb.type = 'checkbox'; cb.checked = t.done;
-    cb.onchange = () => { t.done = cb.checked; saveTodos(); };
-    const span = document.createElement('span'); span.textContent = t.text;
-    const del = document.createElement('button');
-    del.textContent = '×'; del.setAttribute('aria-label', 'Hapus');
-    del.onclick = () => { todos.splice(i, 1); saveTodos(); };
-    li.append(cb, span, del);
-    list.append(li);
+/* Borang tambah transaksi */
+let formKind = 'in', formCat = null;
+function openSheet(kind) {
+  formKind = kind; formCat = CATS[kind][0];
+  $('sheetTitle').textContent = kind === 'in' ? 'Duit Masuk' : 'Duit Keluar';
+  $('sheet').style.setProperty('--accent', kind === 'in' ? 'var(--in)' : 'var(--out)');
+  $('amt').value = ''; $('note').value = '';
+  const now = new Date();
+  $('date').value = monthKey(view) === monthKey(now) ? isoDate(now) : isoDate(view);
+  $('pay').value = 'Tunai';
+  const chips = $('cats'); chips.innerHTML = '';
+  CATS[kind].forEach(c => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'chip' + (c === formCat ? ' on' : ''); b.textContent = c;
+    b.onclick = () => {
+      formCat = c;
+      chips.querySelectorAll('.chip').forEach(x => x.classList.toggle('on', x === b));
+    };
+    chips.append(b);
   });
-  $('todoCount').textContent = todos.filter(t => !t.done).length;
+  $('sheet').showModal();
+  setTimeout(() => $('amt').focus(), 50);
 }
-function saveTodos() { store.set('todos', todos); renderTodos(); }
-$('todoForm').onsubmit = e => {
+document.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openSheet(b.dataset.open));
+$('cancel').onclick = () => $('sheet').close();
+$('txForm').onsubmit = e => {
   e.preventDefault();
-  const text = $('todoInput').value.trim();
-  if (!text) return;
-  todos.push({ text, done: false });
-  $('todoInput').value = '';
-  saveTodos();
+  const sen = Math.round(parseFloat($('amt').value.replace(/,/g, '.').replace(/[^\d.]/g, '')) * 100);
+  if (!sen || sen <= 0) { $('amt').focus(); return; }
+  txs.push({ id: Date.now(), kind: formKind, amt: sen, cat: formCat, note: $('note').value.trim(), date: $('date').value, pay: $('pay').value });
+  const d = new Date($('date').value + 'T00:00'); view = new Date(d.getFullYear(), d.getMonth(), 1);
+  $('sheet').close();
+  save();
 };
-renderTodos();
 
-/* Catatan */
-$('notes').value = store.get('notes', '');
-let noteTimer;
-$('notes').oninput = () => {
-  clearTimeout(noteTimer);
-  noteTimer = setTimeout(() => store.set('notes', $('notes').value), 300);
+/* Backup & eksport */
+function download(name, text, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type }));
+  a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+$('exportCsv').onclick = () => {
+  const m = monthTx().sort((a, b) => a.date.localeCompare(b.date));
+  const esc = s => `"${String(s).replace(/"/g, '""')}"`;
+  const lines = [['Tarikh', 'Jenis', 'Kategori', 'Nota', 'Cara bayar', 'Amaun (RM)'].join(',')];
+  m.forEach(t => lines.push([t.date, t.kind === 'in' ? 'Masuk' : 'Keluar', esc(t.cat), esc(t.note), esc(t.pay),
+    ((t.kind === 'in' ? 1 : -1) * t.amt / 100).toFixed(2)].join(',')));
+  download(`akaun-${monthKey(view)}.csv`, '﻿' + lines.join('\n'), 'text/csv');
 };
+$('backup').onclick = () => download(`backup-akaun-${isoDate(new Date())}.json`,
+  JSON.stringify({ shop: store.get('shop', ''), txs }, null, 1), 'application/json');
+$('restore').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    if (!Array.isArray(data.txs)) throw 0;
+    if (!confirm(`Pulih ${data.txs.length} rekod? Data sekarang akan diganti.`)) return;
+    txs = data.txs;
+    if (data.shop) { store.set('shop', data.shop); $('shopName').textContent = data.shop; }
+    save();
+  } catch { alert('Fail backup tidak sah.'); }
+  e.target.value = '';
+};
+
+render();
+setInterval(() => { $('today').textContent = new Date().toLocaleDateString('ms-MY', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); }, 60000);
 
 /* Pasang sebagai aplikasi (PWA) */
 let deferredPrompt;
-addEventListener('beforeinstallprompt', e => {
-  e.preventDefault();
-  deferredPrompt = e;
-  $('installBtn').hidden = false;
-});
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredPrompt = e; $('installBtn').hidden = false; });
 $('installBtn').onclick = async () => {
   $('installBtn').hidden = true;
   if (!deferredPrompt) return;
-  deferredPrompt.prompt();
-  await deferredPrompt.userChoice;
-  deferredPrompt = null;
+  deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt = null;
 };
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
-}
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});

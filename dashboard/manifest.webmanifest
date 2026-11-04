@@ -1,14 +1,14 @@
 {
-  "name": "Dash Android",
-  "short_name": "Dash",
-  "description": "Dashboard ringkas untuk HP Android",
+  "name": "Akaun Kedai Workshop",
+  "short_name": "Akaun Kedai",
+  "description": "Rekod duit masuk, keluar dan untung kedai workshop",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#0b1016",
   "theme_color": "#0b1016",
-  "lang": "id",
+  "lang": "ms",
   "icons": [
     { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
   ]
