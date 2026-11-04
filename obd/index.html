@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1016">
+  <title>Diagnostik OBD2</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header class="top">
+    <a class="back" href="../kedai/index.html" id="backLink" aria-label="Kembali ke Aboy Workshop">‹</a>
+    <div>
+      <h1>Diagnostik OBD2</h1>
+      <p class="sub" id="status">Belum bersambung</p>
+    </div>
+    <span class="pill" id="voltPill" hidden></span>
+  </header>
+
+  <main>
+    <!-- ============ SAMBUNG ============ -->
+    <section class="view" id="view-conn">
+      <section class="card">
+        <h2>Sambung dongle ELM327</h2>
+        <ol class="steps sub">
+          <li>Cucuk dongle ke port OBD2 (bawah stereng), hidupkan suis kunci ke <b>ON</b> atau hidupkan enjin.</li>
+          <li>Dongle <b>Bluetooth biasa</b>: pair dulu di Tetapan Bluetooth telefon (PIN biasanya <b>1234</b> atau <b>0000</b>).</li>
+          <li>Dongle <b>BLE</b> (Bluetooth 4.0): tak perlu pair, tekan "Cari BLE".</li>
+        </ol>
+        <div class="row-btns">
+          <button class="btn primary" id="btnList">Senarai dongle</button>
+          <button class="btn" id="btnScanBle">Cari BLE</button>
+          <button class="btn" id="btnDemo">Demo</button>
+        </div>
+        <div class="row-btns" id="webBtns" hidden>
+          <button class="btn" id="btnWebBle">Web Bluetooth (BLE)</button>
+          <button class="btn" id="btnSerial">Port Serial / COM</button>
+        </div>
+        <ul class="list" id="devList"></ul>
+        <label class="field">Protokol
+          <select id="protoSel">
+            <option value="0">Auto (disyorkan)</option>
+            <option value="6">CAN 11-bit 500k (kebanyakan kereta 2008+)</option>
+            <option value="7">CAN 29-bit 500k</option>
+            <option value="8">CAN 11-bit 250k</option>
+            <option value="9">CAN 29-bit 250k</option>
+            <option value="3">ISO 9141-2 (K-line)</option>
+            <option value="4">KWP2000 5-baud</option>
+            <option value="5">KWP2000 pantas</option>
+            <option value="1">J1850 PWM</option>
+            <option value="2">J1850 VPW</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="card" id="infoCard" hidden>
+        <h2>Maklumat kenderaan</h2>
+        <dl class="kv" id="infoList"></dl>
+        <button class="btn danger" id="btnDisconnect">Putus sambungan</button>
+      </section>
+    </section>
+
+    <!-- ============ DATA LANGSUNG ============ -->
+    <section class="view" id="view-live" hidden>
+      <div class="bar">
+        <button class="btn primary" id="btnLive">▶ Mula</button>
+        <button class="btn" id="btnPickPid">＋ Pilih PID</button>
+        <span class="sub" id="liveRate"></span>
+      </div>
+      <div class="gauges" id="gauges"></div>
+      <p class="sub empty" id="liveEmpty">Sambung ke kereta dulu, kemudian tekan Mula.</p>
+    </section>
+
+    <!-- ============ KOD KEROSAKAN ============ -->
+    <section class="view" id="view-dtc" hidden>
+      <div class="bar">
+        <button class="btn primary" id="btnReadDtc">Baca kod</button>
+        <button class="btn danger" id="btnClearDtc">Padam kod</button>
+      </div>
+      <div id="milBox"></div>
+      <h3 class="sec">Kod tersimpan (mod 03)</h3>
+      <ul class="list" id="dtcStored"><li class="sub">Belum dibaca</li></ul>
+      <h3 class="sec">Kod menunggu (mod 07)</h3>
+      <ul class="list" id="dtcPending"><li class="sub">Belum dibaca</li></ul>
+      <h3 class="sec">Kod kekal (mod 0A)</h3>
+      <ul class="list" id="dtcPerm"><li class="sub">Belum dibaca</li></ul>
+    </section>
+
+    <!-- ============ MONITOR CAN ============ -->
+    <section class="view" id="view-can" hidden>
+      <div class="bar">
+        <button class="btn primary" id="btnMon">▶ Tangkap</button>
+        <button class="btn" id="btnRec">● Rakam</button>
+        <button class="btn" id="btnExport" disabled>Eksport CSV</button>
+        <button class="btn" id="btnAddSig">＋ Isyarat</button>
+      </div>
+      <div class="bar">
+        <label class="field inline">Tapis ID <input id="filtId" placeholder="cth 7E8 (kosong = semua)" maxlength="8" autocapitalize="characters"></label>
+        <label class="field inline">Mask <input id="filtMask" placeholder="7FF" maxlength="8" autocapitalize="characters"></label>
+      </div>
+      <p class="sub" id="canStats">Tangkap semua bingkai di bas CAN (perlu kereta protokol CAN). Bait yang berubah diwarnakan.</p>
+      <div class="can-table" id="canTable"></div>
+      <h3 class="sec">Isyarat dinyahkod</h3>
+      <ul class="list" id="sigList"></ul>
+    </section>
+
+    <!-- ============ TERMINAL ============ -->
+    <section class="view" id="view-term" hidden>
+      <form class="bar" id="termForm">
+        <input id="termIn" placeholder="cth 010C, ATDP, 0902" autocapitalize="characters" autocomplete="off">
+        <button class="btn primary">Hantar</button>
+      </form>
+      <div class="chips" id="termChips"></div>
+      <pre class="term" id="termOut"></pre>
+    </section>
+  </main>
+
+  <nav class="tabbar" aria-label="Menu">
+    <button class="on" data-tab="conn"><svg viewBox="0 0 24 24"><path d="m7 7 10 10-5 5V2l5 5L7 17"/></svg>Sambung</button>
+    <button data-tab="live"><svg viewBox="0 0 24 24"><path d="M12 14l4-4M3.3 17a10 10 0 1 1 17.4 0z"/></svg>Langsung</button>
+    <button data-tab="dtc"><svg viewBox="0 0 24 24"><path d="M5 18h14l-1-6a6 6 0 0 0-12 0zM12 3v2M4 6l1.5 1.5M20 6l-1.5 1.5M12 10v4M12 16v.5"/></svg>Kod</button>
+    <button data-tab="can"><svg viewBox="0 0 24 24"><path d="M3 12h3l3-7 4 14 3-7h5"/></svg>CAN</button>
+    <button data-tab="term"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM7 9l3 3-3 3M12 15h5"/></svg>Terminal</button>
+  </nav>
+
+  <dialog id="pidDlg">
+    <form method="dialog" class="dlg">
+      <h2>Pilih data untuk dipapar</h2>
+      <p class="sub">Hanya PID yang disokong kereta ini disenaraikan.</p>
+      <div class="pid-pick" id="pidPick"></div>
+      <div class="row-btns"><button class="btn primary" value="ok">Siap</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="sigDlg">
+    <form method="dialog" class="dlg" id="sigForm">
+      <h2>Isyarat CAN (gaya DBC)</h2>
+      <label class="field">Nama <input name="name" required placeholder="cth RPM enjin"></label>
+      <div class="two">
+        <label class="field">ID CAN (hex) <input name="id" required placeholder="316" autocapitalize="characters"></label>
+        <label class="field">Unit <input name="unit" placeholder="rpm"></label>
+      </div>
+      <div class="two">
+        <label class="field">Bit mula <input name="start" type="number" min="0" max="63" required value="16"></label>
+        <label class="field">Panjang (bit) <input name="length" type="number" min="1" max="32" required value="16"></label>
+      </div>
+      <div class="two">
+        <label class="field">Susunan bait
+          <select name="order"><option value="intel">Intel (little endian)</option><option value="motorola">Motorola (big endian)</option></select>
+        </label>
+        <label class="field">Bertanda <select name="signed"><option value="">Tidak</option><option value="1">Ya</option></select></label>
+      </div>
+      <div class="two">
+        <label class="field">Skala <input name="scale" type="number" step="any" value="1"></label>
+        <label class="field">Ofset <input name="offset" type="number" step="any" value="0"></label>
+      </div>
+      <p class="sub">Nilai = mentah × skala + ofset. Intel: bit mula = LSB. Motorola: bit mula = MSB (penomboran DBC).</p>
+      <div class="row-btns">
+        <button class="btn" value="cancel" formnovalidate>Batal</button>
+        <button class="btn primary" value="ok">Simpan</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="obd-core.js"></script>
+  <script src="elm327.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
