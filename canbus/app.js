@@ -72,6 +72,7 @@ function applyLanguage() {
   if (!$('actName').value || $('actName').dataset.auto === '1') { $('actName').value = t('act.default'); $('actName').dataset.auto = '1'; }
   updatePill(); updateButtons(); updateBase(); renderResume(); renderProfiles(); fillLearnPids(); renderInfo(); refreshGraphIndex(); buildCharts();
   if (findCands) renderFind();
+  renderSend(); updateAuto();
   renderLearn(learn.final); renderAct(act.final);
   render(true);
 }
@@ -128,6 +129,7 @@ function labelFor(id) {
   if (g && g.conf) return { name: g.name, source: 'guess', detail: t('ids.guessPct', { n: Math.round(g.conf * 100) }) + (g.detail ? ' · ' + g.detail : ''), signals: [], roles: g.roles };
   return { name: g ? g.name : t('src.unk'), source: 'unk', detail: '', signals: [] };
 }
+function noteText(id) { const p = profile().labels[id]; return p && p.note ? p.note : ''; }
 function detailText(p) {
   if (p.learnPid != null) return t('learn.matchDetail', { pid: C.hex2(p.learnPid), n: p.learnScore });
   if (p.actScore != null) return t('act.detail', { n: p.actScore });
@@ -245,6 +247,7 @@ function renderInfo() {
 }
 
 async function disconnect(keepStatus) {
+  sending = null; auto.on = false;
   await stopEngine();
   const tr = transport; transport = null; elm = null; sniffOk = null; connInfo = null;
   if (tr) try { await tr.close(); } catch (e) { /* abaikan */ }
@@ -385,8 +388,9 @@ function renderIds() {
     const l = labelFor(e.id); counts[l.source]++;
     const d = e.frames[e.frames.length - 1].data;
     const sv = l.signals.slice(0, 4).map(s => esc(sigName(s)) + ': ' + esc(sigValueText(s, d))).join(' · ');
-    return `<button class="idc" data-id="${e.id}"><span class="i">${e.id}</span><span class="f">${esc(l.name)}</span><span class="src s-${l.source}">${esc(SRC(l.source))}</span>`
-      + `<span class="d">${esc(l.detail || '')}${l.detail ? ' · ' : ''}${d.map(C.hex2).join(' ')}</span>${sv ? `<span class="sv">${sv}</span>` : ''}</button>`;
+    const note = noteText(e.id);
+    return `<button class="idc" data-id="${e.id}"><span class="i">${e.id}</span><span class="f">${esc(l.name)}${note ? ' 📝' : ''}</span><span class="src s-${l.source}">${esc(SRC(l.source))}</span>`
+      + `<span class="d">${esc(l.detail || '')}${l.detail ? ' · ' : ''}${d.map(C.hex2).join(' ')}</span>${note ? `<span class="sv">${esc(note)}</span>` : ''}${sv ? `<span class="sv">${sv}</span>` : ''}</button>`;
   }).join('');
   $('idList').innerHTML = html + (known.length ? `<h3 class="sec">${esc(t('ids.notSeen'))}</h3>` + known.sort().map(id => {
     const l = labelFor(id);
@@ -406,6 +410,7 @@ function openIdDialog(id) {
   $('idDlgTitle').textContent = 'ID ' + id + ' · ' + SRC(l.source);
   $('idDlgRaw').textContent = e ? t('dlg.latest', { data: e.frames[e.frames.length - 1].data.map(C.hex2).join(' '), n: e.count }) : t('dlg.notSeen');
   $('idName').value = p.name || '';
+  $('idNote').value = p.note || '';
   $('idName').placeholder = l.name;
   $('btnDelLabel').hidden = !profile().labels[id];
   renderDlgSigs(l);
@@ -469,8 +474,9 @@ $('idDlg').addEventListener('close', () => {
   if ($('idDlg').returnValue !== 'ok' || !dlgId) return;
   const name = $('idName').value.trim();
   const old = profile().labels[dlgId];
-  if (!name && !dlgSigs.length) delete profile().labels[dlgId];
-  else profile().labels[dlgId] = Object.assign({}, old || {}, { name, source: old && old.source && old.source !== 'user' ? old.source : 'user', signals: dlgSigs });
+  const note = $('idNote').value.trim();
+  if (!name && !dlgSigs.length && !note) delete profile().labels[dlgId];
+  else profile().labels[dlgId] = Object.assign({}, old || {}, { name, note, source: old && old.source && old.source !== 'user' ? old.source : 'user', signals: dlgSigs });
   saveProfiles(); refreshGraphIndex(); render(true); toast(t('msg.savedProfile', { p: profiles.current }));
 });
 
@@ -943,6 +949,131 @@ kv.get('session').then(s => {
 });
 kv.get('lastRec').then(r => { if (r && r.length) { lastRec = r; $('btnCsv').disabled = false; } });
 
+// ---------- Belajar sendiri (auto) ----------
+// Pantau beberapa PID berselang-seli dengan sniff, korelasi di latar belakang,
+// dan cadangkan label bila padanan kuat & stabil. Pengguna sahkan dengan ✓.
+const auto = { on: false, snaps: {}, sugg: new Map(), dismissed: new Set() };
+$('btnAuto').onclick = () => { if (auto.on) stopAuto(); else startAuto(); };
+function stopAuto() { auto.on = false; if (engine && engine.kind === 'auto') stopEngine(); updateAuto(); }
+async function startAuto() {
+  if (needCan()) return;
+  if (sniffOk === false) { toast(t('learn.noSniff')); return; }
+  await stopEngine();
+  const AUTO_PIDS = [0x0C, 0x0D, 0x11, 0x04, 0x0B, 0x05];
+  const pids = AUTO_PIDS.filter(p => !supported.length || supported.includes(p));
+  if (!pids.length) { toast(t('auto.noPids')); return; }
+  auto.on = true; auto.snaps = {}; auto.sugg = new Map(); auto.dismissed = new Set();
+  pids.forEach(p => auto.snaps[p] = []);
+  updateAuto();
+  startEngine('auto', async eng => {
+    eng.burst = true; let i = 0, lastCalc = now();
+    while (!eng.stop && elm) {
+      const pid = pids[i++ % pids.length];
+      const b0 = now();
+      await elm.burst(200, onLine);
+      const r = await elm.readPid(pid).catch(() => null);
+      if (r && typeof r.value === 'number') {
+        const d = {};
+        for (const e of hist.ids.values()) { const f = e.frames[e.frames.length - 1]; if (f.t >= b0) d[e.id] = f.data; }
+        const arr = auto.snaps[pid]; arr.push({ t: now(), v: r.value, d }); if (arr.length > 400) arr.shift();
+      }
+      if (now() - lastCalc > 4000) { lastCalc = now(); autoAnalyse(pids); renderAuto(); }
+    }
+  });
+}
+function autoAnalyse(pids) {
+  for (const pid of pids) {
+    const snaps = auto.snaps[pid]; if (snaps.length < 8) continue;
+    const vals = snaps.map(s => s.v); if (Math.max(...vals) - Math.min(...vals) < 1e-6) continue;
+    const h = new A.History(1e7);
+    for (const sn of snaps) for (const id in sn.d) h.add({ id, data: sn.d[id], t: sn.t });
+    const res = A.correlate(snaps.map(s => ({ t: s.t, v: s.v })), h, { top: 1 });
+    const c = res.results[0];
+    if (c && c.score >= 0.9) {
+      const key = pid + ':' + c.id + ':' + c.start + ':' + c.length;
+      if (auto.dismissed.has(key)) continue;
+      const prev = auto.sugg.get(key);
+      auto.sugg.set(key, { pid, c, key, hits: (prev ? prev.hits : 0) + 1, score: c.score });
+    }
+  }
+}
+function updateAuto() {
+  $('btnAuto').textContent = auto.on ? t('common.stop') : t('auto.start');
+  $('btnAuto').setAttribute('aria-pressed', String(auto.on));
+  $('autoInfo').textContent = auto.on ? t('auto.running') : t('auto.off');
+  renderAuto();
+}
+function renderAuto() {
+  const list = [...auto.sugg.values()].filter(s => s.hits >= 2).sort((a, b) => b.score - a.score);
+  $('autoResults').innerHTML = list.map(sg => {
+    const name = C.pidName(sg.pid);
+    return `<div class="auto-sug"><span class="m">ID ${sg.c.id} · ${esc(candLabel(sg.c))}</span><span class="pct">${Math.round(sg.score * 100)}%</span>`
+      + `<span class="d">${esc(name)} · ${esc(t('graph.value'))} = ${esc(t('graph.raw'))} × ${sg.c.scale} ${sg.c.offset < 0 ? '−' : '+'} ${Math.abs(sg.c.offset)}</span>`
+      + `<button class="ok" data-k="${esc(sg.key)}" aria-label="${esc(t('auto.confirm'))}">✓ ${esc(t('auto.confirm'))}</button><button data-x="${esc(sg.key)}" aria-label="${esc(t('auto.dismiss'))}">✕</button></div>`;
+  }).join('') || (auto.on ? `<p class="sub">${esc(t('auto.watching'))}</p>` : '');
+  $('autoResults').querySelectorAll('button[data-k]').forEach(b => b.onclick = () => {
+    const sg = auto.sugg.get(b.dataset.k); if (!sg) return;
+    learn = { pid: sg.pid };
+    saveLearned(sg.c);
+    auto.dismissed.add(sg.key); auto.sugg.delete(sg.key); renderAuto();
+  });
+  $('autoResults').querySelectorAll('button[data-x]').forEach(b => b.onclick = () => { auto.dismissed.add(b.dataset.x); auto.sugg.delete(b.dataset.x); renderAuto(); });
+}
+
+// ---------- Hantar bingkai ke ECU (aftermarket / bench) ----------
+// Kunci keselamatan: perlu akui amaran, kereta tidak bergerak, dan ID diagnostik OBD disekat.
+let sending = null;
+const BLOCKED_SEND = id => { const n = parseInt(id, 16); return id.length <= 3 && n >= 0x7DF && n <= 0x7EF; };
+function updateSend() {
+  const ack = $('sendAck').checked;
+  $('btnSend').disabled = !ack || !!sending;
+  $('btnSendStop').hidden = !sending;
+  $('btnSend').textContent = sending && sending.hz ? t('send.sending') : t('send.send');
+}
+$('sendAck').onchange = updateSend;
+async function carMoving() {
+  if (!supported.length || !supported.includes(0x0D)) return null;   // tiada PID kelajuan
+  const r = await elm.readPid(0x0D).catch(() => null);
+  return r ? r.value > 0 : null;
+}
+$('btnSend').onclick = async () => {
+  if (needCan()) return;
+  if (!$('sendAck').checked) { toast(t('send.mustAck')); return; }
+  const id = $('sendId').value.trim().toUpperCase();
+  if (!/^[0-9A-F]{3}$|^[0-9A-F]{8}$/.test(id)) { toast(t('send.badId')); return; }
+  if (BLOCKED_SEND(id)) { toast(t('send.blocked')); return; }
+  const data = $('sendData').value.trim().split(/\s+/).filter(Boolean);
+  if (!data.every(b => /^[0-9A-F]{1,2}$/.test(b)) || data.length === 0 || data.length > 8) { toast(t('send.badData')); return; }
+  const bytes = data.map(b => parseInt(b, 16));
+  const moving = await carMoving();
+  if (moving === true) { toast(t('send.moving')); return; }
+  if (moving === null && !(await ask(t('send.confirmTitle'), t('send.confirmPark'), { ok: t('send.confirmOk') }))) return;
+  if (engine) await stopEngine();
+  const hz = +$('sendHz').value;
+  await elm.sendFrame(id, bytes).catch(e => toast(e.message));
+  if (!hz) { await elm.endSend().catch(() => {}); $('sendInfo').textContent = t('send.sentOnce', { id }); return; }
+  // Hantar berkala
+  keepScreen(true);
+  sending = { id, bytes, hz, count: 1, t0: now() }; updateSend();
+  const period = 1000 / hz;
+  (async () => {
+    while (sending && elm) {
+      await sleep(period);
+      if (!sending || !elm) break;
+      await elm.sendFrame(id, bytes).catch(() => {});
+      sending.count++;
+      $('sendInfo').textContent = t('send.sendingInfo', { id, hz, n: sending.count });
+    }
+    if (elm) await elm.endSend().catch(() => {});
+    keepScreen(false); updateSend();
+  })();
+};
+$('btnSendStop').onclick = () => { sending = null; $('sendInfo').textContent = t('send.stopped'); };
+function renderSend() {
+  $('sendSafe').innerHTML = [t('send.s1'), t('send.s2'), t('send.s3'), t('send.s4')].map(x => `<li class="n">${esc(x)}</li>`).join('');
+  updateSend();
+}
+
 // ---------- Terminal ----------
 $('termForm').addEventListener('submit', async e => {
   e.preventDefault();
@@ -971,7 +1102,8 @@ function render(force) {
   if (tab === 'sniff') renderSniff();
   if (tab === 'graf') renderCharts();
   if (tab === 'ids' && (force || tn - lastIds > 1000)) { lastIds = tn; renderIds(); }
-  if (tab === 'learn') { if (engine && engine.kind === 'learn') renderLearn(); if (act.running) renderAct(); }
+  if (tab === 'learn') { if (engine && engine.kind === 'learn') renderLearn(); if (act.running) renderAct(); if (auto.on) { autoAnalyse(Object.keys(auto.snaps).map(Number)); renderAuto(); $('autoInfo').textContent = t('auto.runningN', { n: Object.values(auto.snaps).reduce((a, b) => a + b.length, 0) }); } }
+  if (tab === 'send') renderSend();
   if ($('idDlg').open && dlgId) renderIdBytes();
 }
 setInterval(() => { if (!document.hidden) render(); }, 250);

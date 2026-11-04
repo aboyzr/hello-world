@@ -83,6 +83,16 @@
       </section>
 
       <section class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <h2 style="margin:0" data-i18n="auto.title"></h2>
+          <button class="btn small" id="btnAuto" aria-pressed="false"></button>
+        </div>
+        <p class="sub" data-i18n="auto.intro"></p>
+        <p class="sub" id="autoInfo"></p>
+        <div id="autoResults"></div>
+      </section>
+
+      <section class="card">
         <h2 data-i18n="learn.pidTitle"></h2>
         <p class="sub" data-i18n="learn.pidIntro"></p>
         <label class="field" for="learnPid"><span data-i18n="learn.ref"></span><select id="learnPid"></select></label>
@@ -123,6 +133,30 @@
         </div>
         <p class="sub" id="actInfo"></p>
         <div id="actResults"></div>
+      </section>
+    </section>
+
+    <!-- ============ SEND (ECU aftermarket / bench) ============ -->
+    <section class="view" id="view-send" hidden>
+      <section class="card warn-card">
+        <h2 data-i18n="send.title"></h2>
+        <p class="sub" data-i18n-html="send.intro"></p>
+        <ul class="safe" id="sendSafe"></ul>
+        <label class="chk"><input type="checkbox" id="sendAck"><span data-i18n="send.ack"></span></label>
+      </section>
+      <section class="card">
+        <div class="two">
+          <label class="field" for="sendId"><span data-i18n="send.id"></span><input id="sendId" placeholder="5A0" maxlength="8" autocapitalize="characters"></label>
+          <label class="field" for="sendHz"><span data-i18n="send.rate"></span>
+            <select id="sendHz"><option value="0" data-i18n="send.once"></option><option value="10">10 Hz</option><option value="20">20 Hz</option><option value="50">50 Hz</option></select>
+          </label>
+        </div>
+        <label class="field" for="sendData"><span data-i18n="send.data"></span><input id="sendData" placeholder="01 00 00 00 00 00 00 00" class="mono" autocapitalize="characters"></label>
+        <div class="bar">
+          <button class="btn primary" id="btnSend" disabled></button>
+          <button class="btn danger big-toggle" id="btnSendStop" hidden data-i18n="send.stopAll"></button>
+        </div>
+        <p class="sub" id="sendInfo"></p>
       </section>
     </section>
 
@@ -178,6 +212,7 @@
     <button data-tab="sniff"><svg viewBox="0 0 24 24"><path d="M3 12h3l2-6 4 12 2-6h7"/></svg><span data-i18n="tab.sniff"></span></button>
     <button data-tab="ids"><svg viewBox="0 0 24 24"><path d="M4 4h7l9 9-7 7-9-9zM8 8h.01"/></svg><span data-i18n="tab.ids"></span></button>
     <button data-tab="learn"><svg viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0-4 10.5V17h8v-3.5A6 6 0 0 0 12 3zM9 21h6"/></svg><span data-i18n="tab.learn"></span></button>
+    <button data-tab="send"><svg viewBox="0 0 24 24"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/></svg><span data-i18n="tab.send"></span></button>
     <button class="on" data-tab="conn"><svg viewBox="0 0 24 24"><path d="m7 7 10 10-5 5V2l5 5L7 17"/></svg><span data-i18n="tab.conn"></span></button>
   </nav>
 
@@ -199,6 +234,7 @@
       <label class="field" for="idName"><span data-i18n="dlg.name"></span><input id="idName" name="name" data-i18n-ph="dlg.namePh"></label>
       <h3 class="sec" data-i18n="dlg.signals"></h3>
       <ul class="list" id="idSigs"></ul>
+      <label class="field" for="idNote"><span data-i18n="dlg.note"></span><textarea id="idNote" rows="2" data-i18n-ph="dlg.notePh"></textarea></label>
       <details class="add-sig">
         <summary data-i18n="dlg.addManual"></summary>
         <div class="two">

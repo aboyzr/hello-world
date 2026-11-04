@@ -133,7 +133,7 @@ details.card > summary { font-weight: 600; }
 .term .tx { color: #7fb8ff; }
 
 .tabbar { position: fixed; left: 0; right: 0; bottom: 0; display: flex; justify-content: space-around; background: var(--card); border-top: 1px solid var(--line); padding: 6px max(4px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(4px, env(safe-area-inset-left)); z-index: 5; }
-.tabbar button { border: 0; background: none; color: var(--muted); font-size: 11.5px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 2px; flex: 1; }
+.tabbar button { border: 0; background: none; color: var(--muted); font-size: 10.5px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 2px; flex: 1; }
 .tabbar svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .tabbar button.on { color: var(--text); font-weight: 600; }
 .tabbar button.on svg { stroke: var(--amber); }
@@ -167,3 +167,15 @@ dialog::backdrop { background: rgba(0,0,0,.6); }
 .bits i.flip { background: var(--ok); }
 .bcell button { border: 1px solid var(--line); background: none; border-radius: 7px; font-size: 11px; padding: 3px 0; color: var(--amber); min-height: 26px; }
 .resume { border-color: var(--amber); }
+
+.warn-card { border-color: var(--bad); }
+.warn-card h2 { color: var(--bad); }
+.chk { display: flex; gap: 10px; align-items: flex-start; margin-top: 10px; font-size: 14px; }
+.chk input { width: 20px; height: 20px; accent-color: var(--bad); flex: none; margin-top: 1px; }
+#idNote { background: var(--card2); border: 1px solid var(--line); border-radius: 10px; padding: 10px; color: var(--text); font: inherit; resize: vertical; width: 100%; }
+.auto-sug { display: grid; grid-template-columns: 1fr auto auto; gap: 4px 8px; background: var(--card2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-top: 8px; align-items: center; }
+.auto-sug .m { font: 600 14px var(--mono); grid-column: 1 / 2; }
+.auto-sug .d { grid-column: 1 / 4; font-size: 12px; color: var(--muted); }
+.auto-sug .pct { font: 600 13px var(--mono); color: var(--ok); }
+.auto-sug button { border: 1px solid var(--line); background: none; border-radius: 8px; min-height: 34px; padding: 4px 10px; font-size: 13px; }
+.auto-sug button.ok { color: var(--ok); border-color: var(--ok); }

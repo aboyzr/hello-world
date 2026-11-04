@@ -154,3 +154,12 @@ test('cari nilai odometer 16/24-bit dan tapis', () => {
   const t = A.searchValue(latest, 33.7, 0.01);
   assert.ok(t.some(c => c.id === '320' && c.start === 16 && c.length === 8 && Math.abs(c.scale - 100 / 255) < 1e-4));
 });
+
+test('hantar bingkai: ELM327 set header dan data (simulator)', async () => {
+  const sim = new (require('../elm327.js').SimTransport)({ latency: 1 });
+  const elm = new (require('../elm327.js').Elm327)(sim);
+  await elm.init();
+  await elm.sendFrame('5A0', [1, 0, 0, 0, 0, 0, 0, 0]);
+  await elm.endSend();
+  assert.deepStrictEqual(sim.lastTx, { id: '5A0', data: '0100000000000000' });
+});

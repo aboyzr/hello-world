@@ -162,6 +162,27 @@
       await this.send('ATCAF1');
     }
 
+    /*
+     * Hantar satu bingkai CAN mentah (untuk ECU aftermarket / bench, cth MyEFI).
+     * ATCAF0 supaya bait dihantar tepat tanpa PCI; ATSH set ID. Tidak menunggu jawapan.
+     */
+    async sendFrame(id, data) {
+      if (!this.protocol.can) throw new Error(tr('elm.canOnly', 'Sniff CAN hanya untuk kereta protokol CAN'));
+      const hex = data.map(b => Core.hex2(b & 0xff)).join('');
+      await this.send('ATCAF0');
+      if (this.protocol.ext) {
+        const full = id.toUpperCase().padStart(8, '0');
+        await this.send('ATCP' + full.slice(0, 2));      // bait atas (priority)
+        await this.send('ATSH' + full.slice(2));         // 6 nibble bawah
+      } else {
+        await this.send('ATSH' + id.toUpperCase().padStart(3, '0'));
+      }
+      // Hantar data; ELM akan cuba terima, jadi had masa pendek dan abaikan NO DATA
+      await this.send(hex, 700).catch(() => {});
+    }
+
+    async endSend() { await this.send('ATCAF1').catch(() => {}); }
+
     // Uji sama ada dongle sokong ATMA dan ada trafik di port OBD
     async probeSniff() {
       if (!this.protocol.can) return { ok: false, reason: tr('elm.notCan', 'Kereta bukan protokol CAN') };
@@ -328,9 +349,15 @@
       if (c === 'ATDPN') return 'A6';
       if (c === 'ATDP') return 'AUTO, ISO 15765-4 (CAN 11/500)';
       if (c === 'ATMA') { this._startMon(); return null; }
+      if (/^ATSH/.test(c)) { this.txHeader = c.slice(4); return 'OK'; }
+      if (/^ATCP/.test(c)) { this.txPrio = c.slice(4); return 'OK'; }
       if (c.startsWith('AT')) return 'OK';
       if (!/^[0-9A-F]+$/.test(c)) return '?';
-      if (!this.caf) return 'NO DATA'; // tanpa format ISO-TP, ECU tidak faham
+      if (!this.caf) {
+        // Mod hantar mentah: catat bingkai yang 'diterima' ECU demo
+        if (this.txHeader) { this.lastTx = { id: (this.txPrio || '') + this.txHeader, data: c }; return 'NO DATA'; }
+        return 'NO DATA';
+      }
       const s = this._state(); const mode = c.slice(0, 2), pid = parseInt(c.slice(2, 4), 16);
       const w16 = v => [(Math.round(v) >> 8) & 0xff, Math.round(v) & 0xff];
       if (mode === '01') {
