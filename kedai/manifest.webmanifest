@@ -1,0 +1,15 @@
+{
+  "name": "Aboy Workshop - Akaun",
+  "short_name": "Aboy Workshop",
+  "description": "Resit pelanggan, resit pembelian dan kira untung kedai",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b1016",
+  "theme_color": "#0b1016",
+  "lang": "ms",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
