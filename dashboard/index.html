@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1016">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>Dash Android</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header class="top">
+    <div>
+      <p class="greet" id="greet">Halo</p>
+      <h1 class="clock" id="clock">--:--</h1>
+      <p class="date" id="date"></p>
+    </div>
+    <button class="icon-btn" id="themeBtn" aria-label="Ganti tema">◐</button>
+  </header>
+
+  <main class="grid">
+    <section class="card stat">
+      <h2>Baterai</h2>
+      <p class="big" id="batt">—</p>
+      <div class="bar"><span id="battBar"></span></div>
+      <p class="sub" id="battSub">Memeriksa…</p>
+    </section>
+
+    <section class="card stat">
+      <h2>Jaringan</h2>
+      <p class="big" id="net">—</p>
+      <p class="sub" id="netSub"></p>
+    </section>
+
+    <section class="card wide">
+      <h2>Perangkat</h2>
+      <dl class="info" id="device"></dl>
+    </section>
+
+    <section class="card wide">
+      <div class="row">
+        <h2>Tugas</h2>
+        <span class="pill" id="todoCount">0</span>
+      </div>
+      <form id="todoForm" class="add">
+        <input id="todoInput" placeholder="Tambah tugas…" autocomplete="off" maxlength="120">
+        <button type="submit" aria-label="Tambah">＋</button>
+      </form>
+      <ul id="todoList" class="todos"></ul>
+    </section>
+
+    <section class="card wide">
+      <h2>Catatan</h2>
+      <textarea id="notes" placeholder="Tulis catatan cepat… (tersimpan otomatis)"></textarea>
+    </section>
+  </main>
+
+  <button class="install" id="installBtn" hidden>Pasang ke layar utama</button>
+
+  <script src="app.js"></script>
+</body>
+</html>
