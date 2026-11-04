@@ -1,6 +1,6 @@
 {
-  "name": "Akaun Kedai",
-  "short_name": "Akaun Kedai",
+  "name": "Aboy Workshop - Akaun",
+  "short_name": "Aboy Workshop",
   "description": "Resit pelanggan, resit pembelian dan kira untung kedai",
   "start_url": "./",
   "scope": "./",

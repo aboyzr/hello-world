@@ -23,7 +23,7 @@ function el(tag, cls, text) {
 
 const BUY_CATS = ['Stok / alat ganti', 'Gaji pekerja', 'Sewa kedai', 'Bil elektrik / air', 'Peralatan', 'Minyak / pengangkutan', 'Lain-lain'];
 const PAY = ['Tunai', 'Online / QR', 'Kad', 'Hutang'];
-const DEFAULT_SHOP = { name: 'Kedai Saya', addr: '', phone: '', ssm: '', footer: 'Terima kasih! Sila datang lagi.', prefix: 'R' };
+const DEFAULT_SHOP = { name: 'Aboy Workshop', addr: 'Kg Ketior, Pulai, 33000 Kuala Kangsar, Perak', phone: '017-4266790 / WhatsApp: 011-37722618', ssm: '', footer: 'Terima kasih! Sila datang lagi.', prefix: 'R' };
 
 let shop = { ...DEFAULT_SHOP };
 let nextNo = 1;
@@ -493,7 +493,7 @@ function fillSettings() {
 $('setForm').onsubmit = async e => {
   e.preventDefault();
   shop = {
-    name: $('sName').value.trim() || 'Kedai Saya', addr: $('sAddr').value.trim(), phone: $('sPhone').value.trim(),
+    name: $('sName').value.trim() || DEFAULT_SHOP.name, addr: $('sAddr').value.trim(), phone: $('sPhone').value.trim(),
     ssm: $('sSsm').value.trim(), footer: $('sFooter').value.trim(), prefix: $('sPrefix').value.trim()
   };
   const n = parseInt($('sNext').value, 10);

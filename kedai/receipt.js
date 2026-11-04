@@ -55,7 +55,7 @@ const Receipt = (() => {
         gap(16);
       };
 
-      center(shop.name || 'Kedai Saya', 34, true);
+      center(shop.name || 'Aboy Workshop', 34, true);
       gap(4);
       center(shop.addr, 20);
       if (shop.phone) center('Tel: ' + shop.phone, 20);
@@ -101,7 +101,7 @@ const Receipt = (() => {
 
   // Teks ringkas untuk mesej WhatsApp
   function text(s, shop) {
-    const L = [`*${shop.name || 'Kedai Saya'}*`, `${s.paid ? 'Resit' : 'Invois'} ${s.no} — ${dmy(s.date)}`];
+    const L = [`*${shop.name || 'Aboy Workshop'}*`, `${s.paid ? 'Resit' : 'Invois'} ${s.no} — ${dmy(s.date)}`];
     const veh = [s.plate, s.vehicle].filter(Boolean).join(' · ');
     if (veh) L.push('Kenderaan: ' + veh);
     L.push('');
