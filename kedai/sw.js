@@ -1,4 +1,4 @@
-const CACHE = 'akaun-kedai-v2';
+const CACHE = 'akaun-kedai-v3';
 const FILES = ['./', 'index.html', 'app.css', 'app.js', 'db.js', 'receipt.js', 'manifest.webmanifest', 'icon.svg'];
 
 self.addEventListener('install', e => {

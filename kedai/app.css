@@ -175,3 +175,4 @@ dialog::backdrop { background: #000c; }
   #printArea { display: block !important; }
   #printArea img { width: 72mm; display: block; margin: 0 auto; }
 }
+.apk-link { display: inline-block; text-decoration: none; color: var(--text); }
