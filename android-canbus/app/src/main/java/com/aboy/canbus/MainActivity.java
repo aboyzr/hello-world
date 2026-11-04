@@ -68,7 +68,7 @@ public class MainActivity extends Activity {
                 try {
                     startActivity(new Intent(Intent.ACTION_VIEW, uri));
                 } catch (ActivityNotFoundException e) {
-                    toast("Tiada app untuk buka link ini");
+                    toast(ObdBluetooth.tr("No app can open this link", "Tiada app untuk buka link ini"));
                 }
                 return true;
             }
@@ -84,10 +84,10 @@ public class MainActivity extends Activity {
                 pick.addCategory(Intent.CATEGORY_OPENABLE);
                 pick.setType("*/*");
                 try {
-                    startActivityForResult(Intent.createChooser(pick, "Pilih fail DBC"), REQ_FILE);
+                    startActivityForResult(Intent.createChooser(pick, ObdBluetooth.tr("Choose DBC file", "Pilih fail DBC")), REQ_FILE);
                 } catch (ActivityNotFoundException e) {
                     fileCallback = null;
-                    toast("Tiada app untuk pilih fail");
+                    toast(ObdBluetooth.tr("No app to pick a file", "Tiada app untuk pilih fail"));
                     return false;
                 }
                 return true;
@@ -149,7 +149,7 @@ public class MainActivity extends Activity {
         public void saveFile(String name, String mime, String base64) {
             byte[] bytes = Base64.decode(base64, Base64.DEFAULT);
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-                toast("Simpan fail perlukan Android 10 ke atas");
+                toast(ObdBluetooth.tr("Saving files needs Android 10 or newer", "Simpan fail perlukan Android 10 ke atas"));
                 return;
             }
             try {
@@ -162,9 +162,9 @@ public class MainActivity extends Activity {
                 try (OutputStream out = getContentResolver().openOutputStream(uri)) {
                     out.write(bytes);
                 }
-                toast("Disimpan: Download/Aboy Canbus/" + name);
+                toast(ObdBluetooth.tr("Saved: ", "Disimpan: ") + "Download/Aboy Canbus/" + name);
             } catch (Exception e) {
-                toast("Gagal simpan: " + e.getMessage());
+                toast(ObdBluetooth.tr("Save failed: ", "Gagal simpan: ") + e.getMessage());
             }
         }
 

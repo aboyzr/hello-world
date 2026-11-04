@@ -7,6 +7,10 @@ memaparkan bacaan sensor dalam graf berserta ID, bait dan nilai hex mentah semas
 Muat turun APK: https://github.com/aboyzr/hello-world/releases/download/canbus/AboyCanbus.apk
 (terbit selepas kod digabung ke `master`).
 
+## Bahasa
+English (lalai) atau Bahasa Malaysia: tekan **EN / BM** di bahagian atas app. Pilihan disimpan, dan mesej
+Bluetooth dari Android turut ikut bahasa dipilih. Teks ada dalam `i18n.js`.
+
 ## Tab
 | Tab | Fungsi |
 |---|---|
@@ -24,6 +28,7 @@ Muat turun APK: https://github.com/aboyzr/hello-world/releases/download/canbus/A
 - ID dan formula dalam mod **Demo** direka untuk simulasi, bukan maksud ID kereta sebenar.
 
 ## Struktur kod
+- `i18n.js`: kamus English dan Bahasa Malaysia
 - `can-core.js`: huraian jawapan ELM327, ISO-TP, PID mod 01, DTC, VIN, bingkai CAN, ekstrak isyarat DBC
 - `analyze.js`: label standard & J1939, tekaan corak, korelasi dengan PID, pembelajaran tindakan
 - `dbc.js`: baca/tulis fail DBC

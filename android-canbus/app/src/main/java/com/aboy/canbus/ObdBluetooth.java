@@ -68,6 +68,18 @@ public class ObdBluetooth {
     private volatile boolean bleWriting;
     private volatile boolean connected;
 
+    /** Bahasa dipilih dalam app (EN lalai) — ditetapkan dari JavaScript */
+    static volatile boolean english = true;
+
+    static String tr(String en, String ms) {
+        return english ? en : ms;
+    }
+
+    @JavascriptInterface
+    public void setLanguage(String lang) {
+        english = !"ms".equals(lang);
+    }
+
     ObdBluetooth(Activity act, WebView web) {
         this.act = act;
         this.web = web;
@@ -112,13 +124,13 @@ public class ObdBluetooth {
         afterPermission = null;
         js("onPermission", ok ? "1" : "");
         if (ok && r != null) io.execute(r);
-        else if (!ok) js("onError", "Kebenaran Bluetooth ditolak. Benarkan di Tetapan > Apps > Aboy Canbus.");
+        else if (!ok) js("onError", tr("Bluetooth permission denied. Allow it in Settings > Apps > Aboy Canbus.", "Kebenaran Bluetooth ditolak. Benarkan di Tetapan > Apps > Aboy Canbus."));
     }
 
     private boolean checkAdapter() {
         BluetoothAdapter a = adapter();
-        if (a == null) { js("onError", "Telefon ini tiada Bluetooth"); return false; }
-        if (!a.isEnabled()) { js("onError", "Bluetooth dimatikan. Hidupkan Bluetooth dulu."); return false; }
+        if (a == null) { js("onError", tr("This phone has no Bluetooth", "Telefon ini tiada Bluetooth")); return false; }
+        if (!a.isEnabled()) { js("onError", tr("Bluetooth is off. Turn Bluetooth on first.", "Bluetooth dimatikan. Hidupkan Bluetooth dulu.")); return false; }
         return true;
     }
 
@@ -163,7 +175,7 @@ public class ObdBluetooth {
             }
         };
         main.post(() -> {
-            try { sc.startScan(cb); } catch (Exception e) { js("onError", "Gagal imbas BLE: " + e.getMessage()); }
+            try { sc.startScan(cb); } catch (Exception e) { js("onError", tr("BLE scan failed: ", "Gagal imbas BLE: ") + e.getMessage()); }
         });
         main.postDelayed(() -> {
             try { sc.stopScan(cb); } catch (Exception ignored) { }
@@ -181,7 +193,7 @@ public class ObdBluetooth {
             closeQuietly();
             BluetoothDevice dev;
             try { dev = adapter().getRemoteDevice(address); }
-            catch (Exception e) { js("onError", "Alamat tidak sah"); return; }
+            catch (Exception e) { js("onError", tr("Invalid address", "Alamat tidak sah")); return; }
             if ("ble".equals(type)) connectBle(dev);
             else connectClassic(dev);
         }));
@@ -203,7 +215,8 @@ public class ObdBluetooth {
                 s.connect();
             } catch (Exception second) {
                 try { if (s != null) s.close(); } catch (Exception ignored) { }
-                js("onError", "Gagal sambung ke " + nameOf(dev) + ". Pastikan dongle dicucuk, kunci ON, dan tidak disambung ke app lain.");
+                js("onError", tr("Could not connect to " + nameOf(dev) + ". Make sure the dongle is plugged in, the key is ON, and no other app is connected to it.",
+                        "Gagal sambung ke " + nameOf(dev) + ". Pastikan dongle dicucuk, kunci ON, dan tidak disambung ke app lain."));
                 return;
             }
         }
@@ -225,7 +238,7 @@ public class ObdBluetooth {
             reader.setDaemon(true);
             reader.start();
         } catch (Exception e) {
-            js("onError", "Ralat sambungan: " + e.getMessage());
+            js("onError", tr("Connection error: ", "Ralat sambungan: ") + e.getMessage());
         }
     }
 
@@ -248,7 +261,7 @@ public class ObdBluetooth {
                     boolean was = connected;
                     connected = false;
                     if (was) js("onClose", null);
-                    else js("onError", "Gagal sambung BLE ke " + nameOf(dev) + " (status " + status + ")");
+                    else js("onError", tr("BLE connection failed to ", "Gagal sambung BLE ke ") + nameOf(dev) + " (status " + status + ")");
                 }
             }
 
@@ -268,7 +281,7 @@ public class ObdBluetooth {
                     if (r != null && t != null) { rx = r; tx = t; break; }
                 }
                 if (rx == null) {
-                    js("onError", "Dongle BLE ini tiada servis UART dikenali");
+                    js("onError", tr("This BLE dongle has no known UART service", "Dongle BLE ini tiada servis UART dikenali"));
                     g.disconnect();
                     return;
                 }

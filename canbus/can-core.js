@@ -7,6 +7,9 @@
  */
 (function (root) {
   'use strict';
+  // Terjemahan: guna I18N jika ada (dalam app), jika tidak teks Bahasa Malaysia asal
+  const fill = (s, v) => String(s).replace(/\{(\w+)\}/g, (m, k) => (v && v[k] != null ? v[k] : m));
+  const tr = (k, fb, v) => (root.I18N ? root.I18N.t(k, v, fb) : fill(fb, v));
 
   // ---------- Protokol ELM327 (ATDPN) ----------
   const PROTOCOLS = {
@@ -18,8 +21,9 @@
   function protocolInfo(dpn) {
     const p = String(dpn || '').trim().toUpperCase().replace(/^A(?=[0-9A-C]$)/, ''); // "A6" = auto, protokol 6
     const can = /^[6-9A-C]$/.test(p);
-    return { id: p, name: PROTOCOLS[p] || 'Tidak diketahui', can, ext: can && /^[79A]$/.test(p) };
+    return { id: p, name: protocolName(p), can, ext: can && /^[79A]$/.test(p) };
   }
+  function protocolName(p) { return PROTOCOLS[p] ? tr('proto.name.' + p, PROTOCOLS[p]) : tr('proto.unknown', 'Tidak diketahui'); }
 
   const isHex = s => /^[0-9A-F]+$/i.test(s);
   const hex2 = n => (n & 0xff).toString(16).toUpperCase().padStart(2, '0');
@@ -143,14 +147,14 @@
     0x46: { name: 'Suhu udara luar', unit: '°C', f: temp },
     0x49: { name: 'Pedal minyak D', unit: '%', f: pct },
     0x4C: { name: 'Throttle actuator', unit: '%', f: pct },
-    0x51: { name: 'Jenis minyak', unit: '', f: d => FUEL_TYPES[A(d)] || ('Jenis ' + A(d)) },
+    0x51: { name: 'Jenis minyak', unit: '', f: d => FUEL_TYPES[A(d)] ? tr('fuel.' + A(d), FUEL_TYPES[A(d)]) : tr('fuel.other', 'Jenis {n}', { n: A(d) }) },
     0x5A: { name: 'Pedal minyak relatif', unit: '%', f: pct },
     0x5C: { name: 'Suhu minyak enjin', unit: '°C', f: temp },
     0x5E: { name: 'Kadar guna minyak', unit: 'L/j', f: d => AB(d) / 20 },
-    0x01: { name: 'Status monitor (MIL)', unit: '', f: d => ((A(d) & 0x80) ? 'MIL HIDUP' : 'MIL padam') + ', ' + (A(d) & 0x7f) + ' DTC' },
+    0x01: { name: 'Status monitor (MIL)', unit: '', f: d => ((A(d) & 0x80) ? tr('mil.on', 'MIL HIDUP') : tr('mil.off', 'MIL padam')) + ', ' + (A(d) & 0x7f) + ' DTC' },
     0x14: { name: 'Sensor O2 B1S1', unit: 'V', f: d => A(d) / 200 },
     0x15: { name: 'Sensor O2 B1S2', unit: 'V', f: d => A(d) / 200 },
-    0x1C: { name: 'Standard OBD', unit: '', f: d => OBD_STD[A(d)] || ('Kod ' + A(d)) },
+    0x1C: { name: 'Standard OBD', unit: '', f: d => OBD_STD[A(d)] ? tr('obdstd.' + A(d), OBD_STD[A(d)]) : tr('obdstd.other', 'Kod {n}', { n: A(d) }) },
     0x30: { name: 'Warm-up sejak DTC dipadam', unit: '', f: A },
     0x4D: { name: 'Masa enjin dengan MIL', unit: 'min', f: AB },
     0x4E: { name: 'Masa sejak DTC dipadam', unit: 'min', f: AB },
@@ -164,8 +168,9 @@
     const def = PIDS[pid];
     if (!def || !bytes) return null;
     const v = def.f(bytes);
-    return { pid, name: def.name, unit: def.unit, value: typeof v === 'number' ? Math.round(v * 100) / 100 : v };
+    return { pid, name: pidName(pid), unit: def.unit, value: typeof v === 'number' ? Math.round(v * 100) / 100 : v };
   }
+  function pidName(pid) { const d = PIDS[pid]; return d ? tr('pid.' + hex2(pid), d.name) : 'PID ' + hex2(pid); }
 
   // PID 00/20/40/.. : bitmask PID yang disokong
   function decodeSupported(base, bytes) {
@@ -235,9 +240,9 @@
   };
   const DTC_SYSTEM = { P: 'Powertrain (enjin/transmisi)', C: 'Chassis (ABS/stereng)', B: 'Body (beg udara/lampu/aircond)', U: 'Rangkaian (komunikasi CAN)' };
   function describeDtc(code) {
-    if (DTC_TEXT[code]) return DTC_TEXT[code];
+    if (DTC_TEXT[code]) return tr('dtc.' + code, DTC_TEXT[code]);
     const generic = code[1] === '0' || code[1] === '2' || (code[0] === 'P' && code[1] === '3' && code[2] >= 'A');
-    return (generic ? 'Kod generik ' : 'Kod khas pengeluar ') + '— ' + DTC_SYSTEM[code[0]];
+    return (generic ? tr('dtc.generic', 'Kod generik') : tr('dtc.maker', 'Kod khas pengeluar')) + ' — ' + tr('dtc.sys.' + code[0], DTC_SYSTEM[code[0]]);
   }
 
   // ---------- VIN (mod 09 PID 02) ----------
@@ -293,7 +298,7 @@
   }
 
   const api = {
-    PROTOCOLS, PIDS, protocolInfo, cleanLines, findError, parseResponse, assembleIsoTp, decodePid, decodeSupported,
+    PROTOCOLS, PIDS, DTC_TEXT, protocolInfo, protocolName, pidName, cleanLines, findError, parseResponse, assembleIsoTp, decodePid, decodeSupported,
     dtcFromBytes, decodeDtcs, describeDtc, decodeVin, parseCanFrame, extractSignal, hex2
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

@@ -5,6 +5,8 @@
 (function (root) {
   'use strict';
   const Core = root.ObdCore || (typeof require !== 'undefined' ? require('./can-core.js') : null);
+  const fill = (s, v) => String(s).replace(/\{(\w+)\}/g, (m, k) => (v && v[k] != null ? v[k] : m));
+  const tr = (k, fb, v) => (root.I18N ? root.I18N.t(k, v, fb) : fill(fb, v));
 
   // ---------- ID standard ----------
   const ECU_NAMES = ['enjin (ECM)', 'transmisi (TCM)', 'ECU #3 (biasanya ABS)', 'ECU #4', 'ECU #5', 'ECU #6', 'ECU #7', 'ECU #8'];
@@ -12,30 +14,30 @@
   // PGN J1939 biasa (lori, bas, jentera) — kedudukan isyarat ikut SAE J1939-71
   const J1939 = {
     61444: { name: 'EEC1 · Kawalan enjin elektronik 1', signals: [
-      { name: 'Tork enjin sebenar', start: 16, length: 8, scale: 1, offset: -125, unit: '%' },
-      { name: 'RPM enjin', start: 24, length: 16, scale: 0.125, offset: 0, unit: 'rpm' }] },
+      { spn: 513, name: 'Tork enjin sebenar', start: 16, length: 8, scale: 1, offset: -125, unit: '%' },
+      { spn: 190, name: 'RPM enjin', start: 24, length: 16, scale: 0.125, offset: 0, unit: 'rpm' }] },
     61443: { name: 'EEC2 · Kawalan enjin elektronik 2', signals: [
-      { name: 'Pedal minyak 1', start: 8, length: 8, scale: 0.4, offset: 0, unit: '%' },
-      { name: 'Beban enjin', start: 16, length: 8, scale: 1, offset: 0, unit: '%' }] },
+      { spn: 91, name: 'Pedal minyak 1', start: 8, length: 8, scale: 0.4, offset: 0, unit: '%' },
+      { spn: 92, name: 'Beban enjin', start: 16, length: 8, scale: 1, offset: 0, unit: '%' }] },
     65262: { name: 'ET1 · Suhu enjin', signals: [
-      { name: 'Suhu air penyejuk', start: 0, length: 8, scale: 1, offset: -40, unit: '°C' },
-      { name: 'Suhu minyak bahan api', start: 8, length: 8, scale: 1, offset: -40, unit: '°C' },
-      { name: 'Suhu minyak enjin', start: 16, length: 16, scale: 0.03125, offset: -273, unit: '°C' }] },
+      { spn: 110, name: 'Suhu air penyejuk', start: 0, length: 8, scale: 1, offset: -40, unit: '°C' },
+      { spn: 174, name: 'Suhu minyak bahan api', start: 8, length: 8, scale: 1, offset: -40, unit: '°C' },
+      { spn: 175, name: 'Suhu minyak enjin', start: 16, length: 16, scale: 0.03125, offset: -273, unit: '°C' }] },
     65263: { name: 'EFL/P1 · Paras/tekanan cecair enjin', signals: [
-      { name: 'Tekanan minyak enjin', start: 24, length: 8, scale: 4, offset: 0, unit: 'kPa' }] },
+      { spn: 100, name: 'Tekanan minyak enjin', start: 24, length: 8, scale: 4, offset: 0, unit: 'kPa' }] },
     65265: { name: 'CCVS · Kelajuan kenderaan / cruise', signals: [
-      { name: 'Kelajuan roda', start: 8, length: 16, scale: 1 / 256, offset: 0, unit: 'km/j' }] },
+      { spn: 84, name: 'Kelajuan roda', start: 8, length: 16, scale: 1 / 256, offset: 0, unit: 'km/j' }] },
     65266: { name: 'LFE · Penggunaan bahan api', signals: [
-      { name: 'Kadar bahan api', start: 0, length: 16, scale: 0.05, offset: 0, unit: 'L/j' }] },
+      { spn: 183, name: 'Kadar bahan api', start: 0, length: 16, scale: 0.05, offset: 0, unit: 'L/j' }] },
     65270: { name: 'IC1 · Keadaan intake/ekzos', signals: [
-      { name: 'Tekanan boost', start: 8, length: 8, scale: 2, offset: 0, unit: 'kPa' },
-      { name: 'Suhu manifold intake', start: 16, length: 8, scale: 1, offset: -40, unit: '°C' }] },
+      { spn: 102, name: 'Tekanan boost', start: 8, length: 8, scale: 2, offset: 0, unit: 'kPa' },
+      { spn: 105, name: 'Suhu manifold intake', start: 16, length: 8, scale: 1, offset: -40, unit: '°C' }] },
     65271: { name: 'VEP1 · Voltan kenderaan', signals: [
-      { name: 'Voltan bateri', start: 32, length: 16, scale: 0.05, offset: 0, unit: 'V' }] },
+      { spn: 168, name: 'Voltan bateri', start: 32, length: 16, scale: 0.05, offset: 0, unit: 'V' }] },
     65276: { name: 'DD · Paparan pemandu', signals: [
-      { name: 'Paras bahan api', start: 8, length: 8, scale: 0.4, offset: 0, unit: '%' }] },
+      { spn: 96, name: 'Paras bahan api', start: 8, length: 8, scale: 0.4, offset: 0, unit: '%' }] },
     65253: { name: 'HOURS · Jam enjin', signals: [
-      { name: 'Jumlah jam enjin', start: 0, length: 32, scale: 0.05, offset: 0, unit: 'j' }] },
+      { spn: 247, name: 'Jumlah jam enjin', start: 0, length: 32, scale: 0.05, offset: 0, unit: 'j' }] },
     65226: { name: 'DM1 · Kod kerosakan aktif (J1939)', signals: [] },
     59904: { name: 'Permintaan PGN (J1939)', signals: [] }
   };
@@ -47,25 +49,27 @@
     return { pgn, src: id & 0xff, prio: (id >> 26) & 7 };
   }
 
+  const ecuName = i => tr('an.ecu' + i, ECU_NAMES[i]);
   function standardLabel(idHex, isExt) {
     const id = parseInt(idHex, 16);
     if (!isExt && idHex.length <= 3) {
-      if (id === 0x7DF) return { name: 'Soalan diagnostik OBD ke semua ECU', source: 'std' };
-      if (id >= 0x7E0 && id <= 0x7E7) return { name: 'Soalan diagnostik ke ' + ECU_NAMES[id - 0x7E0], source: 'std' };
-      if (id >= 0x7E8 && id <= 0x7EF) return { name: 'Jawapan diagnostik dari ' + ECU_NAMES[id - 0x7E8], source: 'std' };
+      if (id === 0x7DF) return { name: tr('an.reqAll', 'Soalan diagnostik OBD ke semua ECU'), source: 'std' };
+      if (id >= 0x7E0 && id <= 0x7E7) return { name: tr('an.reqTo', 'Soalan diagnostik ke {ecu}', { ecu: ecuName(id - 0x7E0) }), source: 'std' };
+      if (id >= 0x7E8 && id <= 0x7EF) return { name: tr('an.respFrom', 'Jawapan diagnostik dari {ecu}', { ecu: ecuName(id - 0x7E8) }), source: 'std' };
       return null;
     }
-    if ((id & 0x1FFF0000) === 0x18DB0000 && (id & 0xff) === 0xF1) return { name: 'Soalan diagnostik OBD 29-bit ke semua ECU', source: 'std' };
+    if ((id & 0x1FFF0000) === 0x18DB0000 && (id & 0xff) === 0xF1) return { name: tr('an.reqAll29', 'Soalan diagnostik OBD 29-bit ke semua ECU'), source: 'std' };
     if ((id & 0x1FFF0000) === 0x18DA0000) {
       const ta = (id >> 8) & 0xff, sa = id & 0xff;
-      if (sa === 0xF1) return { name: 'Soalan diagnostik ke ECU 0x' + Core.hex2(ta), source: 'std' };
-      if (ta === 0xF1) return { name: 'Jawapan diagnostik dari ECU 0x' + Core.hex2(sa), source: 'std' };
+      if (sa === 0xF1) return { name: tr('an.reqTo', 'Soalan diagnostik ke {ecu}', { ecu: 'ECU 0x' + Core.hex2(ta) }), source: 'std' };
+      if (ta === 0xF1) return { name: tr('an.respFrom', 'Jawapan diagnostik dari {ecu}', { ecu: 'ECU 0x' + Core.hex2(sa) }), source: 'std' };
     }
     const p = j1939Pgn(idHex);
     const d = J1939[p.pgn];
     if (d) return {
-      name: d.name, source: 'std', detail: 'J1939 PGN ' + p.pgn + ' dari alamat ' + p.src,
-      signals: d.signals.map(s => Object.assign({ id: idHex.toUpperCase(), order: 'intel', signed: false, source: 'std' }, s))
+      name: tr('j1939.pgn' + p.pgn, d.name), source: 'std', detail: tr('an.j1939detail', 'J1939 PGN {pgn} dari alamat {src}', { pgn: p.pgn, src: p.src }),
+      // name tetap (SPN) supaya pilihan graf tidak berubah bila tukar bahasa; label ikut bahasa
+      signals: d.signals.map(s => Object.assign({ id: idHex.toUpperCase(), order: 'intel', signed: false, source: 'std' }, s, { name: 'SPN' + s.spn, label: tr('j1939.spn' + s.spn, s.name) }))
     };
     return null;
   }
@@ -120,13 +124,13 @@
 
   function guess(entry) {
     const fr = entry.frames.slice(-300);
-    if (fr.length < 10) return { name: 'Mengumpul data…', conf: 0, source: 'unk' };
+    if (fr.length < 10) return { name: tr('an.collecting', 'Mengumpul data…'), conf: 0, source: 'unk' };
     const roles = byteRoles(fr);
     const len = fr[fr.length - 1].data.length;
     const hz = entry.hz || 0;
     const detail = [];
     const counters = roles.filter(r => r === 'counter').length, cks = roles.includes('checksum');
-    if (counters) detail.push('counter'); if (cks) detail.push('checksum');
+    if (counters) detail.push(tr('role.counter', 'counter')); if (cks) detail.push(tr('role.checksum', 'checksum'));
 
     // 4 nilai 16-bit hampir sama => kelajuan roda
     if (len === 8) {
@@ -138,17 +142,17 @@
           return mx > 0 && (mx - mn) / mx < 0.1;
         });
         const varies = new Set(fr.map(f => f.data[be ? 1 : 0] + 256 * f.data[be ? 0 : 1])).size > 3;
-        if (ok && varies) return { name: 'Mungkin kelajuan 4 roda (ABS)', conf: 0.7, source: 'guess', detail: '4 nilai 16-bit ' + (be ? 'big' : 'little') + ' endian hampir sama', roles };
+        if (ok && varies) return { name: tr('an.wheels', 'Mungkin kelajuan 4 roda (ABS)'), conf: 0.7, source: 'guess', detail: tr('an.wheelsD', '4 nilai 16-bit {e} endian hampir sama', { e: be ? 'big' : 'little' }), roles };
       }
     }
-    if (roles.every(r => r === 'tetap')) return { name: 'Data tetap (status / konfigurasi)', conf: 0.5, source: 'guess', detail: 'tiada bait berubah', roles };
+    if (roles.every(r => r === 'tetap')) return { name: tr('an.const', 'Data tetap (status / konfigurasi)'), conf: 0.5, source: 'guess', detail: tr('an.constD', 'tiada bait berubah'), roles };
     const analog = roles.filter(r => r === 'analog').length, bits = roles.filter(r => r === 'bit').length;
-    if (analog === 0 && bits > 0) return { name: 'Mungkin suis / status on-off', conf: 0.5, source: 'guess', detail: bits + ' bait bit' + (detail.length ? ', ' + detail.join(', ') : ''), roles };
+    if (analog === 0 && bits > 0) return { name: tr('an.switch', 'Mungkin suis / status on-off'), conf: 0.5, source: 'guess', detail: tr('an.switchD', '{n} bait bit', { n: bits }) + (detail.length ? ', ' + detail.join(', ') : ''), roles };
     // Nilai bertanda di dua bait pertama (sudut stereng biasanya begini)
     const signedLike = fr.slice(-40).some(f => f.data[1] === 0xFF || f.data[1] >= 0xF0) && fr.slice(-40).some(f => f.data[1] <= 0x0F);
-    if (signedLike && roles[0] === 'analog') return { name: 'Mungkin sudut stereng / nilai bertanda', conf: 0.45, source: 'guess', detail: 'nilai melintasi sifar' + (detail.length ? ', ' + detail.join(', ') : ''), roles };
-    const name = analog ? `${analog} bait isyarat analog (sensor)` : 'Isyarat berubah';
-    return { name, conf: 0.35, source: 'guess', detail: (hz ? Math.round(hz) + ' Hz' : '') + (detail.length ? ', ' + detail.join(', ') : ''), roles };
+    if (signedLike && roles[0] === 'analog') return { name: tr('an.steer', 'Mungkin sudut stereng / nilai bertanda'), conf: 0.45, source: 'guess', detail: tr('an.steerD', 'nilai melintasi sifar') + (detail.length ? ', ' + detail.join(', ') : ''), roles };
+    const name = analog ? tr('an.analog', '{n} bait isyarat analog (sensor)', { n: analog }) : tr('an.changing', 'Isyarat berubah');
+    return { name, conf: 0.35, source: 'guess', detail: [hz ? Math.round(hz) + ' Hz' : '', ...detail].filter(Boolean).join(', '), roles };
   }
 
   // ---------- Calon isyarat ----------
@@ -185,7 +189,7 @@
   function correlate(ref, hist, opts) {
     opts = Object.assign({ before: 1500, after: 300, top: 5 }, opts);
     const vals = ref.map(r => r.v);
-    if (ref.length < 6 || Math.max(...vals) - Math.min(...vals) < 1e-9) return { error: 'Nilai rujukan tidak berubah. Ubah keadaan (contoh tekan pedal) semasa merakam.', results: [] };
+    if (ref.length < 6 || Math.max(...vals) - Math.min(...vals) < 1e-9) return { error: tr('an.refFlat', 'Nilai rujukan tidak berubah. Ubah keadaan (contoh tekan pedal) semasa merakam.'), results: [] };
     const results = [];
     for (const e of hist.ids.values()) {
       // padankan setiap titik rujukan dengan bingkai terdekat ID ini

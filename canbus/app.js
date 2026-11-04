@@ -1,7 +1,7 @@
 'use strict';
-/* global ObdCore, Analyze, Dbc, Elm327, AndroidTransport, WebBleTransport, WebSerialTransport, SimTransport */
+/* global I18N, ObdCore, Analyze, Dbc, Elm327, AndroidTransport, WebBleTransport, WebSerialTransport, SimTransport */
 const $ = id => document.getElementById(id);
-const C = ObdCore, A = Analyze;
+const C = ObdCore, A = Analyze, t = I18N.t;
 const NATIVE = window.AndroidBridge || null;
 const now = () => performance.now();
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -11,26 +11,32 @@ const store = {
   set(k, v) { try { localStorage.setItem('canbus.' + k, JSON.stringify(v)); } catch (e) { /* storan penuh / disekat */ } }
 };
 
-let elm = null, transport = null, supported = [], busy = false, sniffOk = null;
+let elm = null, transport = null, supported = [], busy = false, sniffOk = null, connInfo = null;
 const hist = new A.History(3000);
 let frameCount = 0, frameT0 = now();
 
 // ---------- Umum ----------
 function toast(msg) {
-  const t = $('toast'); t.textContent = msg; t.hidden = false;
-  clearTimeout(toast.timer); toast.timer = setTimeout(() => { t.hidden = true; }, 3500);
+  const el = $('toast'); el.textContent = msg; el.hidden = false;
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => { el.hidden = true; }, 3500);
 }
 function setStatus(msg, bad) { const s = $('status'); s.textContent = msg || ''; s.hidden = !msg; s.classList.toggle('bad', !!bad); }
-function setPill(text, ok) { const p = $('pill'); p.textContent = text; p.classList.toggle('ok', !!ok); }
+function updatePill() {
+  const p = $('pill');
+  if (!elm) { p.textContent = t('pill.off'); p.classList.remove('ok'); return; }
+  const pr = elm.protocol;
+  p.textContent = '● ' + (pr.can ? 'CAN ' + (pr.ext ? '29-bit' : '11-bit') : C.protocolName(pr.id));
+  p.classList.add('ok');
+}
 function fmt(v) {
   if (typeof v !== 'number' || !isFinite(v)) return String(v);
   const a = Math.abs(v);
   return a >= 1000 ? Math.round(v).toString() : a >= 100 ? v.toFixed(0) : a >= 10 ? v.toFixed(1) : v.toFixed(2);
 }
-function needConn() { if (!elm) { toast('Sambung ke dongle dulu (atau tekan Demo)'); showTab('conn'); return true; } return false; }
+function needConn() { if (!elm) { toast(t('msg.needConn')); showTab('conn'); return true; } return false; }
 function needCan() {
   if (needConn()) return true;
-  if (!elm.protocol.can) { toast('Kereta ini bukan protokol CAN. Hanya graf PID boleh.'); return true; }
+  if (!elm.protocol.can) { toast(t('msg.notCan')); return true; }
   return false;
 }
 function keepScreen(on) { if (NATIVE && NATIVE.keepScreenOn) NATIVE.keepScreenOn(!!on); }
@@ -58,8 +64,21 @@ function showTab(name) {
 }
 document.querySelectorAll('.tabbar button').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
 
+// ---------- Bahasa ----------
+function applyLanguage() {
+  I18N.apply(document);
+  document.querySelectorAll('.lang button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.lang === I18N.lang)));
+  if (NATIVE && window.ObdBridge && window.ObdBridge.setLanguage) window.ObdBridge.setLanguage(I18N.lang);
+  if (!$('actName').value || $('actName').dataset.auto === '1') { $('actName').value = t('act.default'); $('actName').dataset.auto = '1'; }
+  updatePill(); updateButtons(); renderProfiles(); fillLearnPids(); renderInfo(); refreshGraphIndex(); buildCharts();
+  renderLearn(learn.final); renderAct(act.final);
+  render(true);
+}
+document.querySelectorAll('.lang button').forEach(b => b.addEventListener('click', () => { I18N.set(b.dataset.lang); applyLanguage(); }));
+$('actName').addEventListener('input', () => { $('actName').dataset.auto = '0'; });
+
 // ---------- Profil kereta & label ID ----------
-let profiles = store.get('profiles', null) || { current: 'Kereta saya', list: { 'Kereta saya': { labels: {} } } };
+let profiles = store.get('profiles', null) || { current: 'My car', list: { 'My car': { labels: {} } } };
 const profile = () => profiles.list[profiles.current];
 const saveProfiles = () => store.set('profiles', profiles);
 function renderProfiles() {
@@ -67,7 +86,7 @@ function renderProfiles() {
 }
 $('profileSel').onchange = e => { profiles.current = e.target.value; saveProfiles(); refreshGraphIndex(); render(true); };
 $('btnNewProfile').onclick = async () => {
-  const name = await ask('Profil kereta baru', 'Contoh: Myvi 2018 1.5, Saga VVT 2020. Label ID disimpan ikut profil.', { input: true, placeholder: 'Nama kereta', ok: 'Cipta' });
+  const name = await ask(t('ids.newProfileTitle'), t('ids.newProfileText'), { input: true, placeholder: t('ids.newProfilePh'), ok: t('common.create') });
   if (!name) return;
   if (!profiles.list[name]) profiles.list[name] = { labels: {} };
   profiles.current = name; saveProfiles(); renderProfiles(); render(true);
@@ -81,12 +100,16 @@ function signalBytes(sig) {
   } else for (let b = sig.start; b < sig.start + sig.length; b++) set.add(b >> 3);
   return [...set].sort((a, b) => a - b);
 }
-function sigValueText(sig, data) {
-  const v = C.extractSignal(data, sig);
+// Nama/nilai isyarat yang dipelajari dari PID ikut bahasa semasa
+const sigName = s => (s.pid != null ? C.pidName(s.pid) : (s.label || s.name));
+function valueText(sig, v) {
   if (v == null) return '–';
-  if (sig.values && sig.values[String(Math.round(v))] !== undefined) return sig.values[String(Math.round(v))];
+  const key = String(Math.round(v));
+  if (sig.active != null) return Math.round(v) === sig.active ? t('act.active') : t('act.inactive');
+  if (sig.values && sig.values[key] !== undefined) return sig.values[key];
   return fmt(v) + (sig.unit ? ' ' + sig.unit : '');
 }
+const sigValueText = (sig, data) => valueText(sig, C.extractSignal(data, sig));
 
 // Gabung semua sumber label: profil (dipelajari / DBC / sendiri) > standard > tekaan
 const guessCache = new Map();
@@ -95,14 +118,22 @@ function labelFor(id) {
   const p = profile().labels[id];
   const std = A.standardLabel(id, e ? e.ext : id.length > 3);
   if (p && (p.name || (p.signals && p.signals.length))) {
-    return { name: p.name || (std && std.name) || 'ID ' + id, source: p.source || 'user', detail: p.detail || '', signals: (p.signals || []).concat(std && std.signals ? std.signals.filter(s => !(p.signals || []).some(x => x.name === s.name)) : []) };
+    const own = p.signals || [];
+    const name = p.name || (own.length ? t('ids.contains', { name: own.map(sigName).join(', ') }) : (std && std.name) || 'ID ' + id);
+    return { name, source: p.source || 'user', detail: detailText(p), signals: own.concat(std && std.signals ? std.signals.filter(s => !own.some(x => x.name === s.name)) : []) };
   }
-  if (std) return { name: std.name, source: 'std', detail: std.detail || 'ID standard', signals: std.signals || [] };
+  if (std) return { name: std.name, source: 'std', detail: std.detail || t('ids.stdId'), signals: std.signals || [] };
   const g = guessCache.get(id) || (e ? A.guess(e) : null);
-  if (g && g.conf) return { name: g.name, source: 'guess', detail: 'Tekaan ' + Math.round(g.conf * 100) + '%' + (g.detail ? ' · ' + g.detail : ''), signals: [], roles: g.roles };
-  return { name: g ? g.name : 'Belum dikenal', source: 'unk', detail: '', signals: [] };
+  if (g && g.conf) return { name: g.name, source: 'guess', detail: t('ids.guessPct', { n: Math.round(g.conf * 100) }) + (g.detail ? ' · ' + g.detail : ''), signals: [], roles: g.roles };
+  return { name: g ? g.name : t('src.unk'), source: 'unk', detail: '', signals: [] };
 }
-const SRC = { std: 'Standard', dbc: 'DBC', learn: 'Dipelajari', guess: 'Tekaan', user: 'Sendiri', unk: 'Belum dikenal' };
+function detailText(p) {
+  if (p.learnPid != null) return t('learn.matchDetail', { pid: C.hex2(p.learnPid), n: p.learnScore });
+  if (p.actScore != null) return t('act.detail', { n: p.actScore });
+  if (p.dbcFile) return 'DBC: ' + p.dbcFile + (p.dbcSender ? ' · ' + t('ids.from') + ' ' + p.dbcSender : '');
+  return p.detail || '';
+}
+const SRC = s => t('src.' + s);
 
 // ---------- Sambungan ----------
 if (!NATIVE && (WebBleTransport.available() || WebSerialTransport.available())) $('webBtns').hidden = false;
@@ -112,7 +143,7 @@ $('protoSel').addEventListener('change', e => store.set('proto', e.target.value)
 
 const termLog = [];
 function logTerm(dir, text) {
-  if (engine && (engine.kind !== 'term')) return; // jangan banjirkan terminal semasa tangkap
+  if (engine && engine.kind !== 'term') return; // jangan banjirkan terminal semasa tangkap
   termLog.push({ dir, text }); if (termLog.length > 300) termLog.shift();
   const out = $('termOut');
   out.innerHTML = termLog.map(l => l.dir === 'tx' ? '<span class="tx">&gt; ' + esc(l.text) + '</span>' : esc(l.text)).join('\n');
@@ -121,17 +152,17 @@ function logTerm(dir, text) {
 
 async function listDevices(ble) {
   const ul = $('devList');
-  ul.innerHTML = '<li class="sub">' + (ble ? 'Mencari dongle BLE (8 saat)…' : 'Membaca peranti yang telah dipair…') + '</li>';
+  ul.innerHTML = '<li class="sub">' + esc(ble ? t('conn.scanning') : t('conn.reading')) + '</li>';
   try {
     const list = await AndroidTransport.listDevices(ble);
-    if (!list.length) { ul.innerHTML = '<li class="sub">Tiada peranti. ' + (ble ? 'Pastikan dongle dicucuk dan kunci ON.' : 'Pair dongle di Tetapan Bluetooth dulu, atau cuba Cari BLE.') + '</li>'; return; }
+    if (!list.length) { ul.innerHTML = '<li class="sub">' + esc(ble ? t('conn.noneBle') : t('conn.nonePaired')) + '</li>'; return; }
     const last = store.get('lastDev', null);
-    const score = d => /obd|elm|dollar|vlink|v-link|icar|vgate|veepeak|konnwei|obdlink|scan|car|ios-vlink/i.test(d.name || '') ? 1 : 0;
+    const score = d => /obd|elm|dollar|vlink|v-link|icar|vgate|veepeak|konnwei|obdlink|scan|car/i.test(d.name || '') ? 1 : 0;
     list.sort((a, b) => score(b) - score(a));
     ul.innerHTML = '';
     for (const d of list) {
       const li = document.createElement('li');
-      li.innerHTML = `<button class="dev"><span><b>${esc(d.name || '(tiada nama)')}</b><span class="sub mono">${esc(d.address)}</span></span><span class="tag">${d.type === 'ble' ? 'BLE' : 'Classic'}${last && last.address === d.address ? ' · terakhir' : ''}</span></button>`;
+      li.innerHTML = `<button class="dev"><span><b>${esc(d.name || t('conn.noName'))}</b><span class="sub mono">${esc(d.address)}</span></span><span class="tag">${d.type === 'ble' ? 'BLE' : 'Classic'}${last && last.address === d.address ? ' · ' + esc(t('conn.last')) : ''}</span></button>`;
       li.querySelector('button').onclick = () => connect(new AndroidTransport(d), d);
       ul.appendChild(li);
     }
@@ -144,49 +175,55 @@ $('btnWebBle').onclick = () => connect(new WebBleTransport());
 $('btnSerial').onclick = () => connect(new WebSerialTransport());
 $('btnDisconnect').onclick = () => disconnect();
 
-async function connect(t, dev) {
+async function connect(tr, dev) {
   if (busy) return;
   if (elm) await disconnect();
   busy = true;
-  setStatus('Menyambung ke ' + (t.name || 'dongle') + '…');
+  setStatus(t('conn.connecting', { name: tr.name === 'Demo (simulator)' ? t('conn.demo') : (tr.name || 'dongle') }));
   try {
-    await t.open();
-    transport = t;
-    t.onClose(msg => { if (transport === t) { disconnect(); setStatus(msg ? 'Terputus: ' + msg : 'Sambungan terputus', true); } });
-    elm = new Elm327(t, logTerm);
-    setStatus('Memulakan ELM327 dan mencari protokol kereta (boleh ambil 10 saat)…');
+    await tr.open();
+    transport = tr;
+    tr.onClose(msg => { if (transport === tr) { disconnect(); setStatus(msg ? t('conn.lostMsg', { msg }) : t('conn.lost'), true); } });
+    elm = new Elm327(tr, logTerm);
+    setStatus(t('conn.init'));
     const info = await elm.init($('protoSel').value);
     if (dev) store.set('lastDev', dev);
-    setPill('● ' + (info.protocol.can ? 'CAN ' + (info.protocol.ext ? '29-bit' : '11-bit') : info.protocol.name), true);
+    updatePill();
     supported = await elm.supportedPids().catch(() => []);
     const vin = await elm.readVin().catch(() => null);
     const volt = await elm.voltage().catch(() => null);
-    setStatus('Menguji mod sniff…');
+    setStatus(t('conn.probing'));
     const probe = await elm.probeSniff().catch(e => ({ ok: false, reason: e.message }));
     sniffOk = probe.ok;
     setStatus('');
-    $('infoList').innerHTML = [
-      ['Dongle', esc(t.name)], ['Cip', esc(info.version || '-')], ['Protokol', esc(info.protocol.name)],
-      ['ECU menjawab', esc(info.ecus.join(', ') || '-')], ['VIN', esc(vin || 'Tidak disokong')],
-      ['Voltan bateri', volt ? volt.toFixed(1) + ' V' : '-'], ['PID disokong', supported.length],
-      ['Mod sniff (ATMA)', probe.ok ? `<span class="ok">Disokong · ${probe.frames} bingkai dalam 0.8 s</span>` : `<span class="bad">${esc(probe.reason)}</span>`]
-    ].map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+    connInfo = { name: tr instanceof SimTransport ? null : tr.name, info, vin, volt, probe };
+    renderInfo();
     $('infoCard').hidden = false;
-    $('btnDemoDbc').hidden = !(t instanceof SimTransport);
+    $('btnDemoDbc').hidden = !(tr instanceof SimTransport);
     fillLearnPids();
-    toast(probe.ok ? 'Bersambung. Cuba tab Sniff atau Belajar.' : 'Bersambung. Sniff tidak tersedia, tapi graf PID boleh.');
+    toast(probe.ok ? t('conn.okSniff') : t('conn.okNoSniff'));
   } catch (e) {
-    setStatus('Gagal: ' + e.message, true);
+    setStatus(t('conn.failed', { msg: e.message }), true);
     await disconnect(true);
   } finally { busy = false; }
+}
+function renderInfo() {
+  if (!connInfo) return;
+  const { name, info, vin, volt, probe } = connInfo;
+  $('infoList').innerHTML = [
+    [t('info.dongle'), esc(name || t('conn.demo'))], [t('info.chip'), esc(info.version || '-')], [t('info.protocol'), esc(C.protocolName(info.protocol.id))],
+    [t('info.ecus'), esc(info.ecus.join(', ') || '-')], ['VIN', esc(vin || t('info.notSupported'))],
+    [t('info.battery'), volt ? volt.toFixed(1) + ' V' : '-'], [t('info.pids'), supported.length],
+    [t('info.sniff'), probe.ok ? `<span class="ok">${esc(t('info.sniffOk', { n: probe.frames }))}</span>` : `<span class="bad">${esc(probe.reason)}</span>`]
+  ].map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`).join('');
 }
 
 async function disconnect(keepStatus) {
   await stopEngine();
-  const t = transport; transport = null; elm = null; sniffOk = null;
-  if (t) try { await t.close(); } catch (e) { /* abaikan */ }
+  const tr = transport; transport = null; elm = null; sniffOk = null; connInfo = null;
+  if (tr) try { await tr.close(); } catch (e) { /* abaikan */ }
   $('infoCard').hidden = true; $('btnDemoDbc').hidden = true;
-  setPill('Belum bersambung');
+  updatePill();
   if (!keepStatus) setStatus('');
   updateButtons();
 }
@@ -210,7 +247,7 @@ function startEngine(kind, fn) {
     });
 }
 async function sniffUntilStop(eng, filter) {
-  await elm.startMonitor(onLine, filter, () => toast('BUFFER FULL: terlalu banyak trafik. Guna tapis ID.'), () => { toast('Dongle tidak sokong ATMA'); eng.stop = true; });
+  await elm.startMonitor(onLine, filter, () => toast(t('msg.bufferFull')), () => { toast(t('msg.noAtma')); eng.stop = true; });
   while (!eng.stop && elm) await sleep(100);
   if (elm) await elm.stopMonitor();
 }
@@ -224,7 +261,7 @@ function onLine(line) {
   if (engine && !engine.burst) e.hz = e.arr.length / 2;
   if (recording) {
     recording.push([((f.t - recT0) / 1000).toFixed(3), f.id, f.data.length, f.data.map(C.hex2).join(' ')]);
-    if (recording.length >= 200000) { toast('Had rakaman dicapai'); toggleRec(); }
+    if (recording.length >= 200000) { toast(t('sniff.recLimit')); toggleRec(); }
   }
   if (act.running) act.samples.push({ on: act.on, f });
   const keys = graphIndex.get(f.id);
@@ -233,12 +270,14 @@ function onLine(line) {
 
 function updateButtons() {
   const k = engine && engine.kind;
-  $('btnSniff').textContent = k === 'sniff' ? '■ Henti' : '▶ Tangkap';
-  $('btnGraf').textContent = k === 'graf' ? '■ Henti' : '▶ Mula';
-  $('btnLearn').textContent = k === 'learn' ? '■ Henti & lihat hasil' : '▶ Mula belajar';
-  $('btnAct').textContent = k === 'act' ? '■ Henti & lihat hasil' : '▶ Mula tangkap';
+  $('btnSniff').textContent = k === 'sniff' ? t('common.stop') : t('sniff.capture');
+  $('btnGraf').textContent = k === 'graf' ? t('common.stop') : t('common.start');
+  $('btnLearn').textContent = k === 'learn' ? t('learn.stop') : t('learn.start');
+  $('btnAct').textContent = k === 'act' ? t('learn.stop') : t('act.start');
+  $('btnRec').textContent = recording ? t('sniff.recStop') : t('sniff.rec');
   $('btnActOn').disabled = k !== 'act';
-  if (k !== 'act') { act.on = false; $('btnActOn').classList.remove('on'); $('btnActOn').textContent = 'Saya sedang buat'; }
+  if (k !== 'act') { act.on = false; $('btnActOn').classList.remove('on'); }
+  $('btnActOn').textContent = act.on ? t('act.off') : t('act.on');
 }
 
 // ---------- SNIFF ----------
@@ -247,21 +286,20 @@ $('btnSniff').onclick = async () => {
   if (engine && engine.kind === 'sniff') return stopEngine();
   if (needCan()) return;
   const id = $('filtId').value.trim().toUpperCase(), mask = $('filtMask').value.trim().toUpperCase();
-  if ((id && !/^[0-9A-F]{1,8}$/.test(id)) || (mask && !/^[0-9A-F]{1,8}$/.test(mask))) { toast('ID dan mask mesti nombor hex'); return; }
+  if ((id && !/^[0-9A-F]{1,8}$/.test(id)) || (mask && !/^[0-9A-F]{1,8}$/.test(mask))) { toast(t('msg.hexOnly')); return; }
   await stopEngine();
   frameCount = 0; frameT0 = now();
   startEngine('sniff', eng => sniffUntilStop(eng, id ? { id, mask } : null));
 };
 $('btnRec').onclick = toggleRec;
 function toggleRec() {
-  if (recording) { lastRec = recording; recording = null; $('btnRec').textContent = '● Rakam'; $('btnCsv').disabled = !lastRec.length; toast(lastRec.length + ' bingkai dirakam'); return; }
-  recording = []; recT0 = now(); $('btnRec').textContent = '■ Henti rakam'; $('btnCsv').disabled = true;
-  if (!engine) toast('Tekan Tangkap untuk mula menerima bingkai');
+  if (recording) { lastRec = recording; recording = null; $('btnCsv').disabled = !lastRec.length; updateButtons(); toast(t('sniff.recorded', { n: lastRec.length })); return; }
+  recording = []; recT0 = now(); $('btnCsv').disabled = true; updateButtons();
+  if (!engine) toast(t('sniff.recHint'));
 }
 $('btnCsv').onclick = () => {
   if (!lastRec || !lastRec.length) return;
-  const rows = lastRec.map(r => r.join(','));
-  saveText('can-log-' + stamp() + '.csv', 'text/csv', 'masa_s,id,dlc,data\n' + rows.join('\n'));
+  saveText('can-log-' + stamp() + '.csv', 'text/csv', 'time_s,id,dlc,data\n' + lastRec.map(r => r.join(',')).join('\n'));
 };
 const stamp = () => new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
 function saveText(name, mime, text) {
@@ -273,19 +311,19 @@ function saveText(name, mime, text) {
 const sortIds = () => [...hist.ids.values()].sort((a, b) => a.id.length - b.id.length || a.id.localeCompare(b.id));
 const prevData = new Map(), changedAt = new Map();
 function renderSniff() {
-  const t = now(), rows = sortIds();
+  const tn = now(), rows = sortIds();
   for (const e of rows) {
     const last = e.frames[e.frames.length - 1].data, prev = prevData.get(e.id) || [], ch = changedAt.get(e.id) || [];
-    last.forEach((b, i) => { if (prev[i] !== undefined && prev[i] !== b) ch[i] = t; });
+    last.forEach((b, i) => { if (prev[i] !== undefined && prev[i] !== b) ch[i] = tn; });
     prevData.set(e.id, last); changedAt.set(e.id, ch);
   }
-  $('sniffTable').innerHTML = rows.length ? '<div class="srow head"><span>ID</span><span>Data (bait 0–7)</span><span class="hz">Hz</span></div>' + rows.map(e => {
+  $('sniffTable').innerHTML = rows.length ? `<div class="srow head"><span>ID</span><span>${esc(t('sniff.data'))}</span><span class="hz">Hz</span></div>` + rows.map(e => {
     const d = e.frames[e.frames.length - 1].data, ch = changedAt.get(e.id) || [], g = guessCache.get(e.id), roles = (g && g.roles) || [];
     const lbl = labelFor(e.id);
-    return `<button class="srow" data-id="${e.id}"><span class="id">${e.id}<small>${lbl.source === 'unk' || lbl.source === 'guess' ? '' : esc(lbl.name)}</small></span><span>${d.map((b, i) => `<span class="b${t - (ch[i] || 0) < 400 ? ' chg' : ''}${roles[i] ? ' r-' + roles[i] : ''}">${C.hex2(b)}</span>`).join(' ')}</span><span class="hz">${e.hz ? Math.round(e.hz) : '–'}</span></button>`;
+    return `<button class="srow" data-id="${e.id}"><span class="id">${e.id}<small>${lbl.source === 'unk' || lbl.source === 'guess' ? '' : esc(lbl.name)}</small></span><span>${d.map((b, i) => `<span class="b${tn - (ch[i] || 0) < 400 ? ' chg' : ''}${roles[i] ? ' r-' + roles[i] : ''}">${C.hex2(b)}</span>`).join(' ')}</span><span class="hz">${e.hz ? Math.round(e.hz) : '–'}</span></button>`;
   }).join('') : '';
-  const secs = (t - frameT0) / 1000;
-  if (engine && engine.kind === 'sniff') $('sniffStats').textContent = `${frameCount} bingkai · ${hist.ids.size} ID · ${(frameCount / Math.max(secs, 0.1)).toFixed(0)} bingkai/s` + (recording ? ` · merakam ${recording.length}` : '');
+  const secs = (tn - frameT0) / 1000;
+  if (engine && engine.kind === 'sniff') $('sniffStats').textContent = t('sniff.stats', { f: frameCount, ids: hist.ids.size, rate: (frameCount / Math.max(secs, 0.1)).toFixed(0) }) + (recording ? ' · ' + t('sniff.recording', { n: recording.length }) : '');
 }
 $('sniffTable').addEventListener('click', e => { const r = e.target.closest('.srow[data-id]'); if (r) openIdDialog(r.dataset.id); });
 
@@ -297,17 +335,15 @@ function renderIds() {
   const html = rows.map(e => {
     const l = labelFor(e.id); counts[l.source]++;
     const d = e.frames[e.frames.length - 1].data;
-    const sv = l.signals.slice(0, 4).map(s => esc(s.name) + ': ' + esc(sigValueText(s, d))).join(' · ');
-    return `<button class="idc" data-id="${e.id}"><span class="i">${e.id}</span><span class="f">${esc(l.name)}</span><span class="src s-${l.source}">${SRC[l.source]}</span>`
+    const sv = l.signals.slice(0, 4).map(s => esc(sigName(s)) + ': ' + esc(sigValueText(s, d))).join(' · ');
+    return `<button class="idc" data-id="${e.id}"><span class="i">${e.id}</span><span class="f">${esc(l.name)}</span><span class="src s-${l.source}">${esc(SRC(l.source))}</span>`
       + `<span class="d">${esc(l.detail || '')}${l.detail ? ' · ' : ''}${d.map(C.hex2).join(' ')}</span>${sv ? `<span class="sv">${sv}</span>` : ''}</button>`;
   }).join('');
-  $('idList').innerHTML = html + (known.length ? `<h3 class="sec">Label dalam profil (belum dikesan sesi ini)</h3>` + known.sort().map(id => {
-    const l = profile().labels[id];
-    return `<button class="idc" data-id="${id}"><span class="i">${id}</span><span class="f">${esc(l.name || '(tanpa nama)')}</span><span class="src s-${l.source || 'user'}">${SRC[l.source || 'user']}</span><span class="d">${(l.signals || []).length} isyarat</span></button>`;
+  $('idList').innerHTML = html + (known.length ? `<h3 class="sec">${esc(t('ids.notSeen'))}</h3>` + known.sort().map(id => {
+    const l = labelFor(id);
+    return `<button class="idc" data-id="${id}"><span class="i">${id}</span><span class="f">${esc(l.name)}</span><span class="src s-${l.source}">${esc(SRC(l.source))}</span><span class="d">${esc(t('ids.nSignals', { n: (profile().labels[id].signals || []).length }))}</span></button>`;
   }).join('') : '');
-  $('idsStats').textContent = rows.length
-    ? `${rows.length} ID dikesan · ${counts.std} standard · ${counts.dbc} DBC · ${counts.learn} dipelajari · ${counts.user} sendiri · ${counts.guess} tekaan · ${counts.unk} belum dikenal`
-    : 'Belum ada ID. Mula Sniff atau Belajar untuk mengesan ID di bas CAN.';
+  $('idsStats').textContent = rows.length ? t('ids.stats', Object.assign({ n: rows.length }, counts)) : t('ids.empty');
 }
 $('idList').addEventListener('click', e => { const r = e.target.closest('.idc[data-id]'); if (r) openIdDialog(r.dataset.id); });
 
@@ -318,8 +354,8 @@ function openIdDialog(id) {
   const l = labelFor(id);
   const e = hist.ids.get(id);
   dlgSigs = (p.signals || []).map(s => Object.assign({}, s));
-  $('idDlgTitle').textContent = 'ID ' + id + ' · ' + SRC[l.source];
-  $('idDlgRaw').textContent = e ? 'Data terkini: ' + e.frames[e.frames.length - 1].data.map(C.hex2).join(' ') + ' · ' + e.count + ' bingkai' : 'Belum dikesan sesi ini';
+  $('idDlgTitle').textContent = 'ID ' + id + ' · ' + SRC(l.source);
+  $('idDlgRaw').textContent = e ? t('dlg.latest', { data: e.frames[e.frames.length - 1].data.map(C.hex2).join(' '), n: e.count }) : t('dlg.notSeen');
   $('idName').value = p.name || '';
   $('idName').placeholder = l.name;
   $('btnDelLabel').hidden = !profile().labels[id];
@@ -329,21 +365,21 @@ function openIdDialog(id) {
 function renderDlgSigs(l) {
   const e = hist.ids.get(dlgId); const d = e ? e.frames[e.frames.length - 1].data : [];
   const std = (l && l.source === 'std' ? l.signals : (A.standardLabel(dlgId, dlgId.length > 3) || {}).signals) || [];
-  $('idSigs').innerHTML = dlgSigs.map((s, i) => `<li class="sigrow"><span><b>${esc(s.name)}</b> = ${esc(sigValueText(s, d))}<br><span class="sub mono">bit ${s.start}/${s.length} ${s.order} ×${s.scale} ${s.offset >= 0 ? '+' : ''}${s.offset} · ${SRC[s.source] || 'Sendiri'}</span></span><button type="button" class="x" data-i="${i}" aria-label="Buang isyarat">×</button></li>`).join('')
-    + std.map(s => `<li class="sigrow"><span><b>${esc(s.name)}</b> = ${esc(sigValueText(s, d))}<br><span class="sub mono">J1939 standard · bit ${s.start}/${s.length}</span></span></li>`).join('')
-    || '<li class="sub">Tiada isyarat lagi. Guna tab Belajar, import DBC, atau tambah manual.</li>';
+  $('idSigs').innerHTML = dlgSigs.map((s, i) => `<li class="sigrow"><span><b>${esc(sigName(s))}</b> = ${esc(sigValueText(s, d))}<br><span class="sub mono">bit ${s.start}/${s.length} ${s.order} ×${s.scale} ${s.offset >= 0 ? '+' : ''}${s.offset} · ${esc(SRC(s.source || 'user'))}</span></span><button type="button" class="x" data-i="${i}" aria-label="${esc(t('common.remove'))}">×</button></li>`).join('')
+    + std.map(s => `<li class="sigrow"><span><b>${esc(s.name)}</b> = ${esc(sigValueText(s, d))}<br><span class="sub mono">${esc(t('dlg.j1939'))} · bit ${s.start}/${s.length}</span></span></li>`).join('')
+    || `<li class="sub">${esc(t('dlg.noSignals'))}</li>`;
   $('idSigs').querySelectorAll('button.x').forEach(b => b.onclick = () => { dlgSigs.splice(+b.dataset.i, 1); renderDlgSigs(); });
 }
 $('btnAddSig').onclick = () => {
   const name = $('sgName').value.trim();
-  if (!name) { toast('Isi nama isyarat'); return; }
+  if (!name) { toast(t('dlg.needName')); return; }
   const s = { name, id: dlgId, start: +$('sgStart').value, length: +$('sgLen').value, order: $('sgOrder').value, signed: !!$('sgSigned').value, scale: +$('sgScale').value || 1, offset: +$('sgOffset').value || 0, unit: $('sgUnit').value.trim(), source: 'user' };
-  if (!(s.length >= 1 && s.length <= 32 && s.start >= 0 && s.start <= 63)) { toast('Bit mula 0–63, panjang 1–32'); return; }
+  if (!(s.length >= 1 && s.length <= 32 && s.start >= 0 && s.start <= 63)) { toast(t('dlg.badBits')); return; }
   dlgSigs.push(s); $('sgName').value = ''; renderDlgSigs();
 };
 $('btnDelLabel').onclick = async () => {
   const id = dlgId; $('idDlg').close('cancel');
-  if (await ask('Padam label ID ' + id + '?', 'Nama dan isyarat untuk ID ini dalam profil "' + profiles.current + '" akan dibuang.', { ok: 'Padam' })) {
+  if (await ask(t('dlg.delTitle', { id }), t('dlg.delText', { p: profiles.current }), { ok: t('dlg.delete') })) {
     delete profile().labels[id]; saveProfiles(); refreshGraphIndex(); render(true);
   }
 };
@@ -351,34 +387,36 @@ $('idDlg').addEventListener('close', () => {
   if ($('idDlg').returnValue !== 'ok' || !dlgId) return;
   const name = $('idName').value.trim();
   const old = profile().labels[dlgId];
-  if (!name && !dlgSigs.length) { delete profile().labels[dlgId]; }
-  else profile().labels[dlgId] = { name, source: old && old.source && old.source !== 'user' ? old.source : 'user', detail: old ? old.detail : '', signals: dlgSigs };
-  saveProfiles(); refreshGraphIndex(); render(true); toast('Disimpan dalam profil ' + profiles.current);
+  if (!name && !dlgSigs.length) delete profile().labels[dlgId];
+  else profile().labels[dlgId] = Object.assign({}, old || {}, { name, source: old && old.source && old.source !== 'user' ? old.source : 'user', signals: dlgSigs });
+  saveProfiles(); refreshGraphIndex(); render(true); toast(t('msg.savedProfile', { p: profiles.current }));
 });
 
 function importDbcText(text, fileName) {
   const db = Dbc.parseDbc(text, 'dbc');
-  if (!db.count) { toast('Tiada mesej BO_ dalam fail ini. Pastikan fail .dbc yang betul.'); return; }
+  if (!db.count) { toast(t('ids.dbcEmpty')); return; }
   const labels = profile().labels;
   for (const id in db.messages) {
     const m = db.messages[id];
     const cur = labels[id];
     if (cur && cur.source !== 'dbc') {
       for (const s of m.signals) if (!cur.signals.some(x => x.name === s.name)) cur.signals.push(s);
-    } else labels[id] = { name: m.comment || m.name, source: 'dbc', detail: 'DBC: ' + fileName + (m.sender && m.sender !== 'Vector__XXX' ? ' · dari ' + m.sender : ''), signals: m.signals };
+    } else labels[id] = { name: m.comment || m.name, source: 'dbc', dbcFile: fileName, dbcSender: m.sender && m.sender !== 'Vector__XXX' ? m.sender : '', signals: m.signals };
   }
   saveProfiles(); refreshGraphIndex(); render(true);
-  toast(`${db.count} ID diimport dari ${fileName}` + (db.skipped ? ` (${db.skipped} isyarat multiplex dilangkau)` : ''));
+  toast(t('ids.dbcImported', { n: db.count, f: fileName }) + (db.skipped ? ' ' + t('ids.dbcSkipped', { n: db.skipped }) : ''));
 }
 $('dbcFile').onchange = e => {
   const f = e.target.files[0]; if (!f) return;
   const r = new FileReader(); r.onload = () => importDbcText(r.result, f.name); r.readAsText(f); e.target.value = '';
 };
-$('btnDemoDbc').onclick = () => fetch('dbc/demo.dbc').then(r => r.text()).then(t => importDbcText(t, 'demo.dbc')).catch(() => toast('Gagal baca DBC demo'));
+$('btnDemoDbc').onclick = () => fetch('dbc/demo.dbc').then(r => r.text()).then(x => importDbcText(x, 'demo.dbc')).catch(() => toast(t('ids.demoFail')));
 $('btnExportDbc').onclick = () => {
   const labels = profile().labels;
-  if (!Object.keys(labels).length) { toast('Profil ini belum ada label'); return; }
-  saveText(profiles.current.replace(/[^A-Za-z0-9_-]+/g, '_') + '.dbc', 'text/plain', Dbc.exportDbc(labels, profiles.current));
+  if (!Object.keys(labels).length) { toast(t('ids.noLabels')); return; }
+  const out = {};
+  for (const id in labels) out[id] = { name: labelFor(id).name, signals: (labels[id].signals || []).map(s => Object.assign({}, s, { name: sigName(s) })) };
+  saveText(profiles.current.replace(/[^A-Za-z0-9_-]+/g, '_') + '.dbc', 'text/plain', Dbc.exportDbc(out, profiles.current));
 };
 
 // ---------- GRAF ----------
@@ -399,7 +437,7 @@ function sigByKey(k) {
   return s;
 }
 function findSig(k) {
-  if (k.startsWith('pid:')) { const pid = +k.slice(4); const d = C.PIDS[pid]; return d ? { name: d.name, unit: d.unit, pid } : null; }
+  if (k.startsWith('pid:')) { const pid = +k.slice(4); const d = C.PIDS[pid]; return d ? { pid, unit: d.unit, isPid: true } : null; }
   const [, id, ...rest] = k.split(':'); const name = rest.join(':');
   return allCanSignals().find(s => s.id === id && s.name === name) || null;
 }
@@ -407,9 +445,9 @@ function refreshGraphIndex() {
   graphIndex = new Map(); sigCache.clear();
   for (const k of graphSel) if (k.startsWith('can:')) { const id = k.split(':')[1]; if (!graphIndex.has(id)) graphIndex.set(id, []); graphIndex.get(id).push(k); }
 }
-function pushSeries(k, t, v, raw) {
+function pushSeries(k, tm, v, raw) {
   let s = series.get(k); if (!s) { s = []; series.set(k, s); }
-  s.push({ t, v }); while (s.length && t - s[0].t > 60000) s.shift();
+  s.push({ t: tm, v }); while (s.length && tm - s[0].t > 60000) s.shift();
   if (raw) lastRaw.set(k, raw);
 }
 refreshGraphIndex();
@@ -417,10 +455,10 @@ refreshGraphIndex();
 $('btnPickSig').onclick = () => {
   const can = allCanSignals(); const seen = new Set();
   const canHtml = can.filter(s => { const k = s.id + ':' + s.name; if (seen.has(k)) return false; seen.add(k); return true; })
-    .map(s => { const k = 'can:' + s.id + ':' + s.name; return `<label><input type="checkbox" value="${esc(k)}" ${graphSel.includes(k) ? 'checked' : ''}>${esc(s.name)}<code>ID ${s.id}</code></label>`; }).join('');
+    .map(s => { const k = 'can:' + s.id + ':' + s.name; return `<label><input type="checkbox" value="${esc(k)}" ${graphSel.includes(k) ? 'checked' : ''}>${esc(sigName(s))}<code>ID ${s.id}</code></label>`; }).join('');
   const pids = (supported.length ? supported : Object.keys(C.PIDS).map(Number)).filter(p => C.PIDS[p] && p !== 0x01 && p !== 0x1C && p !== 0x51).sort((a, b) => a - b);
-  const pidHtml = pids.map(p => `<label><input type="checkbox" value="pid:${p}" ${graphSel.includes('pid:' + p) ? 'checked' : ''}>${esc(C.PIDS[p].name)}<code>PID 01 ${C.hex2(p)}</code></label>`).join('');
-  $('sigPick').innerHTML = `<h4>Isyarat CAN</h4>${canHtml || '<p class="sub">Belum ada. Guna tab Belajar atau import DBC.</p>'}<h4>PID standard OBD</h4>${pidHtml}`;
+  const pidHtml = pids.map(p => `<label><input type="checkbox" value="pid:${p}" ${graphSel.includes('pid:' + p) ? 'checked' : ''}>${esc(C.pidName(p))}<code>PID 01 ${C.hex2(p)}</code></label>`).join('');
+  $('sigPick').innerHTML = `<h4>${esc(t('pick.can'))}</h4>${canHtml || `<p class="sub">${esc(t('pick.noCan'))}</p>`}<h4>${esc(t('pick.pid'))}</h4>${pidHtml}`;
   $('sigPick').onchange = () => {
     const boxes = [...$('sigPick').querySelectorAll('input')];
     const on = boxes.filter(b => b.checked);
@@ -441,7 +479,7 @@ async function startGraf() {
   if (!graphSel.length) { $('btnPickSig').click(); return; }
   const pids = graphSel.filter(k => k.startsWith('pid:')).map(k => +k.slice(4));
   const cans = graphSel.filter(k => k.startsWith('can:'));
-  if (cans.length && (!elm.protocol.can || sniffOk === false)) { toast('Isyarat CAN perlukan sniff, yang tidak tersedia pada kereta/dongle ini. Hanya PID dipapar.'); }
+  if (cans.length && (!elm.protocol.can || sniffOk === false)) toast(t('graph.noSniff'));
   const useCan = cans.length && elm.protocol.can && sniffOk !== false;
   await stopEngine();
   startEngine('graf', async eng => {
@@ -455,7 +493,7 @@ async function startGraf() {
         if (r && typeof r.value === 'number') { pushSeries('pid:' + p, now(), r.value); n++; }
       }
       const dt = (now() - t0) / 1000;
-      if (dt > 2) { $('grafRate').textContent = (n / dt).toFixed(1) + ' bacaan PID/s'; n = 0; t0 = now(); }
+      if (dt > 2) { $('grafRate').textContent = t('graph.rate', { n: (n / dt).toFixed(1) }); n = 0; t0 = now(); }
     }
   });
 }
@@ -465,7 +503,7 @@ function buildCharts() {
   $('grafEmpty').hidden = graphSel.length > 0;
   graphSel.forEach((k, i) => {
     const el = document.createElement('div'); el.className = 'chart'; el.dataset.k = k;
-    el.innerHTML = `<div class="head"><div><div class="nm"></div><div class="val">–</div></div><button class="x" aria-label="Buang">×</button></div>`
+    el.innerHTML = `<div class="head"><div><div class="nm"></div><div class="val">–</div></div><button class="x" aria-label="${esc(t('common.remove'))}">×</button></div>`
       + `<div class="idline"><span class="src-id"></span><span class="raw"></span></div><canvas></canvas><div class="hexrow"></div><div class="idline"><span class="formula"></span><span class="hz"></span></div>`;
     el.querySelector('.x').onclick = () => { graphSel.splice(i, 1); store.set('graph', graphSel); refreshGraphIndex(); buildCharts(); };
     box.appendChild(el);
@@ -475,23 +513,21 @@ function buildCharts() {
 function renderCharts() {
   document.querySelectorAll('.chart').forEach(el => {
     const k = el.dataset.k, sig = sigByKey(k), data = series.get(k) || [];
-    if (!sig) { el.querySelector('.nm').textContent = 'Isyarat tiada dalam profil ini'; return; }
-    el.querySelector('.nm').textContent = sig.name;
+    if (!sig) { el.querySelector('.nm').textContent = t('graph.missing'); return; }
+    el.querySelector('.nm').textContent = sigName(sig);
     const last = data[data.length - 1];
-    let valTxt = '–';
-    if (last) valTxt = sig.values && sig.values[String(Math.round(last.v))] !== undefined ? sig.values[String(Math.round(last.v))] : fmt(last.v);
-    el.querySelector('.val').innerHTML = esc(valTxt) + `<small>${esc(sig.unit || '')}</small>`;
-    if (sig.pid !== undefined) {
-      el.querySelector('.src-id').innerHTML = `PID standard <b>01 ${C.hex2(sig.pid)}</b>`;
-      el.querySelector('.raw').textContent = 'soal-jawab OBD';
+    el.querySelector('.val').innerHTML = esc(last ? (sig.active != null || sig.values ? valueText(sig, last.v) : fmt(last.v)) : '–') + `<small>${esc(sig.active != null || sig.values ? '' : sig.unit || '')}</small>`;
+    if (sig.isPid) {
+      el.querySelector('.src-id').innerHTML = `${esc(t('graph.stdPid'))} <b>01 ${C.hex2(sig.pid)}</b>`;
+      el.querySelector('.raw').textContent = t('graph.obdQuery');
       el.querySelector('.formula').textContent = '';
       el.querySelector('.hexrow').innerHTML = '';
     } else {
       const bytes = signalBytes(sig), raw = lastRaw.get(k);
-      el.querySelector('.src-id').innerHTML = `ID <b>0x${esc(sig.id)}</b> · bait ${bytes.length > 1 ? bytes[0] + '–' + bytes[bytes.length - 1] : bytes[0]}${sig.length < 8 ? ' bit ' + (sig.start & 7) : ''}`;
-      el.querySelector('.raw').innerHTML = raw ? 'mentah <b>0x' + bytes.map(b => C.hex2(raw[b] || 0)).join('') + '</b>' : '';
+      el.querySelector('.src-id').innerHTML = `ID <b>0x${esc(sig.id)}</b> · ${esc(t('graph.byte'))} ${bytes.length > 1 ? bytes[0] + '–' + bytes[bytes.length - 1] : bytes[0]}${sig.length < 8 ? ' bit ' + (sig.start & 7) : ''}`;
+      el.querySelector('.raw').innerHTML = raw ? esc(t('graph.raw')) + ' <b>0x' + bytes.map(b => C.hex2(raw[b] || 0)).join('') + '</b>' : '';
       el.querySelector('.hexrow').innerHTML = raw ? `<i class="id">${esc(sig.id)}</i>` + raw.map((b, i) => `<i class="${bytes.includes(i) ? 'sel' : ''}">${C.hex2(b)}</i>`).join('') : '';
-      el.querySelector('.formula').textContent = `nilai = mentah × ${sig.scale} ${sig.offset < 0 ? '−' : '+'} ${Math.abs(sig.offset)}`;
+      el.querySelector('.formula').textContent = `${t('graph.value')} = ${t('graph.raw')} × ${sig.scale} ${sig.offset < 0 ? '−' : '+'} ${Math.abs(sig.offset)}`;
       const e = hist.ids.get(sig.id);
       el.querySelector('.hz').textContent = e && e.hz ? Math.round(e.hz) + ' Hz' : '';
     }
@@ -516,10 +552,10 @@ function drawChart(cv, data) {
   let min = Infinity, max = -Infinity; for (const p of vis) { if (p.v < min) min = p.v; if (p.v > max) max = p.v; }
   if (!vis.length) { min = 0; max = 1; } else if (min === max) { min -= 1; max += 1; }
   const ticks = niceTicks(min, max, 3), lo = ticks[0], hi = ticks[ticks.length - 1];
-  const X = t => padL + (w - padL) * (1 - (tn - t) / win), Y = v => padT + plotH * (1 - (v - lo) / (hi - lo || 1));
+  const X = tm => padL + (w - padL) * (1 - (tn - tm) / win), Y = v => padT + plotH * (1 - (v - lo) / (hi - lo || 1));
   g.font = '10px ui-monospace, Menlo, monospace'; g.fillStyle = cssVar('--muted'); g.strokeStyle = cssVar('--line'); g.lineWidth = 1;
   for (const v of ticks) { const y = Y(v); g.beginPath(); g.moveTo(padL, y); g.lineTo(w, y); g.stroke(); g.fillText(fmt(v), 0, y + 3); }
-  g.fillText('−30 s', padL, h - 3); g.textAlign = 'right'; g.fillText('sekarang', w, h - 3); g.textAlign = 'left';
+  g.fillText('−30 s', padL, h - 3); g.textAlign = 'right'; g.fillText(t('graph.now'), w, h - 3); g.textAlign = 'left';
   if (vis.length < 2) return;
   const tr = cssVar('--amber');
   g.beginPath(); vis.forEach((p, i) => i ? g.lineTo(X(p.t), Y(p.v)) : g.moveTo(X(p.t), Y(p.v)));
@@ -531,35 +567,22 @@ function drawChart(cv, data) {
 }
 
 // ---------- BELAJAR: banding dengan PID ----------
-const LEARN_PIDS = [
-  [0x11, 'Enjin MATI, kunci ON. Tekan pedal minyak perlahan-lahan sampai habis, kemudian lepas. Ulang 3–4 kali dalam 20 saat.'],
-  [0x0C, 'Enjin hidup, gear P/N, brek tangan. Naikkan RPM perlahan ke 3000 dan turun semula, beberapa kali.'],
-  [0x0D, 'Kereta perlu bergerak: minta orang lain memandu, atau angkat roda pemacu di atas jack dengan selamat.'],
-  [0x05, 'Hidupkan enjin sejuk dan rakam 5–10 minit semasa suhu naik. Biar telefon di atas dashboard.'],
-  [0x04, 'Enjin hidup. Naikkan dan turunkan RPM beberapa kali.'],
-  [0x0B, 'Enjin hidup. Naikkan dan turunkan RPM beberapa kali.'],
-  [0x10, 'Enjin hidup. Naikkan dan turunkan RPM beberapa kali.'],
-  [0x0F, 'Rakam lama sedikit (5 minit) semasa enjin panas. Nilai ini berubah perlahan.'],
-  [0x2F, 'Paras minyak berubah sangat perlahan, sukar dipelajari dalam satu sesi.'],
-  [0x42, 'Hidupkan dan matikan lampu besar / aircond untuk ubah voltan.'],
-  [0x5C, 'Rakam beberapa minit semasa enjin panas.'],
-  [0x46, 'Berubah perlahan. Sukar dipelajari dalam satu sesi.']
-];
+const LEARN_PIDS = [0x11, 0x0C, 0x0D, 0x05, 0x04, 0x0B, 0x10, 0x0F, 0x2F, 0x42, 0x5C, 0x46];
 function fillLearnPids() {
-  const list = LEARN_PIDS.filter(([p]) => !supported.length || supported.includes(p));
+  const list = LEARN_PIDS.filter(p => !supported.length || supported.includes(p));
   const cur = $('learnPid').value;
-  $('learnPid').innerHTML = list.map(([p]) => `<option value="${p}">${esc(C.PIDS[p].name)} (PID 01 ${C.hex2(p)})</option>`).join('');
-  if (cur && list.some(([p]) => String(p) === cur)) $('learnPid').value = cur;
-  $('learnPid').onchange();
+  $('learnPid').innerHTML = list.map(p => `<option value="${p}">${esc(C.pidName(p))} (PID 01 ${C.hex2(p)})</option>`).join('');
+  if (cur && list.some(p => String(p) === cur)) $('learnPid').value = cur;
+  updateLearnHint();
 }
-$('learnPid').onchange = () => { const e = LEARN_PIDS.find(([p]) => String(p) === $('learnPid').value); $('learnHint').textContent = e ? e[1] : ''; };
-fillLearnPids();
+function updateLearnHint() { const p = +$('learnPid').value; $('learnHint').textContent = p ? t('hint.' + C.hex2(p), null, t('hint.default')) : ''; }
+$('learnPid').onchange = updateLearnHint;
 
 let learn = { ref: [], pid: null, results: [] };
 $('btnLearn').onclick = async () => {
   if (engine && engine.kind === 'learn') return stopEngine();
   if (needCan()) return;
-  if (sniffOk === false) { toast('Dongle/kereta ini tidak beri trafik sniff, jadi tidak boleh belajar ID.'); return; }
+  if (sniffOk === false) { toast(t('learn.noSniff')); return; }
   await stopEngine();
   const pid = +$('learnPid').value;
   learn = { ref: [], pid, results: [], t0: now() };
@@ -575,41 +598,41 @@ $('btnLearn').onclick = async () => {
       if (now() - lastCalc > 3000) { lastCalc = now(); learn.results = A.correlate(learn.ref, hist).results; renderLearn(); }
     }
   });
-  engine.after = () => { const res = A.correlate(learn.ref, hist); learn.results = res.results; learn.error = res.error; renderLearn(true); };
+  engine.after = () => { const res = A.correlate(learn.ref, hist); learn.results = res.results; learn.error = res.error; learn.final = true; learn.tEnd = now(); renderLearn(true); };
 };
 function renderLearn(final) {
   if (!learn.pid) return;
-  const d = C.PIDS[learn.pid], last = learn.ref[learn.ref.length - 1];
-  const secs = ((engine && engine.kind === 'learn' ? now() : (learn.tEnd || now())) - learn.t0) / 1000;
-  if (!(engine && engine.kind === 'learn') && !learn.tEnd) learn.tEnd = now();
-  $('learnRef').innerHTML = `${last ? fmt(last.v) : '–'}<small> ${esc(d.unit)} · ${esc(d.name)} dari PID</small>`;
-  $('learnInfo').textContent = `${secs.toFixed(0)} s · ${learn.ref.length} bacaan rujukan · ${hist.ids.size} ID`;
+  const name = C.pidName(learn.pid), unit = C.PIDS[learn.pid].unit, last = learn.ref[learn.ref.length - 1];
+  const secs = ((learn.tEnd || now()) - learn.t0) / 1000;
+  $('learnRef').innerHTML = `${last ? fmt(last.v) : '–'}<small> ${esc(unit)} · ${esc(t('learn.fromPid', { name }))}</small>`;
+  $('learnInfo').textContent = t('learn.info', { s: secs.toFixed(0), n: learn.ref.length, ids: hist.ids.size });
   if (final && learn.error) { $('learnResults').innerHTML = `<p class="hint">${esc(learn.error)}</p>`; return; }
-  if (!learn.results.length) { $('learnResults').innerHTML = learn.ref.length > 6 ? '<p class="sub">Belum ada bait yang sepadan. Teruskan ubah keadaan sensor.</p>' : ''; return; }
-  $('learnResults').innerHTML = `<h3 class="sec">${final ? 'Calon terbaik' : 'Calon setakat ini'}</h3>` + learn.results.map((c, i) => {
+  if (!learn.results.length) { $('learnResults').innerHTML = learn.ref.length > 6 ? `<p class="sub">${esc(t('learn.none'))}</p>` : ''; return; }
+  $('learnResults').innerHTML = `<h3 class="sec">${esc(final ? t('learn.best') : t('learn.sofar'))}</h3>` + learn.results.map((c, i) => {
     const e = hist.ids.get(c.id), raw = e ? e.frames[e.frames.length - 1].data : null;
     const v = raw ? C.extractSignal(raw, c) : null;
     const pct = Math.round(c.score * 100);
-    return `<div class="cand"><span class="m">ID ${c.id} · ${c.label}</span><span class="m">${pct}%</span><div class="meter"><span style="width:${pct}%"></span></div>`
-      + `<span class="d">nilai = mentah × ${c.scale} ${c.offset < 0 ? '−' : '+'} ${Math.abs(c.offset)}${v != null ? ' → kini ' + fmt(v) + ' ' + esc(d.unit) : ''}${c.r < 0 ? ' · arah terbalik' : ''}</span>`
-      + (final ? `<button class="btn small" data-i="${i}">Simpan sebagai ${esc(d.name)}</button>` : '') + '</div>';
-  }).join('') + (final ? '<p class="sub">Peratus = sejauh mana bait itu bergerak seiring PID (korelasi). 90% ke atas biasanya tepat. Beberapa ID mungkin bawa isyarat yang sama.</p>' : '');
+    return `<div class="cand"><span class="m">ID ${c.id} · ${esc(candLabel(c))}</span><span class="m">${pct}%</span><div class="meter"><span style="width:${pct}%"></span></div>`
+      + `<span class="d">${esc(t('graph.value'))} = ${esc(t('graph.raw'))} × ${c.scale} ${c.offset < 0 ? '−' : '+'} ${Math.abs(c.offset)}${v != null ? ' → ' + esc(t('learn.now')) + ' ' + fmt(v) + ' ' + esc(unit) : ''}${c.r < 0 ? ' · ' + esc(t('learn.inverse')) : ''}</span>`
+      + (final ? `<button class="btn small" data-i="${i}">${esc(t('learn.saveAs', { name }))}</button>` : '') + '</div>';
+  }).join('') + (final ? `<p class="sub">${esc(t('learn.explain'))}</p>` : '');
   $('learnResults').querySelectorAll('button[data-i]').forEach(b => b.onclick = () => saveLearned(learn.results[+b.dataset.i]));
 }
+const candLabel = c => c.length === 8 ? t('graph.byte') + ' ' + c.bytes[0] : t('graph.byte') + ' ' + c.bytes[0] + '–' + c.bytes[1] + ' ' + (c.order === 'intel' ? 'LE' : 'BE');
 function saveLearned(c) {
-  const d = C.PIDS[learn.pid];
+  const pid = learn.pid, unit = C.PIDS[pid].unit;
   const labels = profile().labels;
-  const l = labels[c.id] || (labels[c.id] = { name: '', source: 'learn', detail: '', signals: [] });
+  const l = labels[c.id] || (labels[c.id] = { name: '', source: 'learn', signals: [] });
   if (l.source === 'user' && !l.name) l.source = 'learn';
-  l.signals = (l.signals || []).filter(s => s.name !== d.name);
-  l.signals.push({ name: d.name, id: c.id, start: c.start, length: c.length, order: c.order, signed: false, scale: c.scale, offset: c.offset, unit: d.unit, source: 'learn', min: 0, max: 0 });
-  if (!l.name) l.name = 'Mengandungi ' + d.name;
-  l.detail = 'padan PID 01 ' + C.hex2(learn.pid) + ' ' + Math.round(c.score * 100) + '%';
+  const key = 'PID_' + C.hex2(pid);
+  l.signals = (l.signals || []).filter(s => s.name !== key);
+  l.signals.push({ name: key, pid, id: c.id, start: c.start, length: c.length, order: c.order, signed: false, scale: c.scale, offset: c.offset, unit, source: 'learn', min: 0, max: 0 });
+  l.learnPid = pid; l.learnScore = Math.round(c.score * 100);
   saveProfiles();
-  const k = 'can:' + c.id + ':' + d.name;
+  const k = 'can:' + c.id + ':' + key;
   if (!graphSel.includes(k) && graphSel.length < 4) { graphSel.push(k); store.set('graph', graphSel); }
   refreshGraphIndex(); buildCharts();
-  toast(`Disimpan: ID ${c.id} ${c.label} = ${d.name}. Lihat di tab Graf.`);
+  toast(t('learn.saved', { id: c.id, b: candLabel(c), name: C.pidName(pid) }));
 }
 
 // ---------- BELAJAR: tindakan ----------
@@ -617,14 +640,14 @@ const act = { running: false, on: false, samples: [], marks: 0, results: [] };
 $('btnAct').onclick = async () => {
   if (engine && engine.kind === 'act') return stopEngine();
   if (needCan()) return;
-  if (sniffOk === false) { toast('Dongle/kereta ini tidak beri trafik sniff.'); return; }
+  if (sniffOk === false) { toast(t('learn.noSniff')); return; }
   await stopEngine();
-  Object.assign(act, { running: true, on: false, samples: [], marks: 0, results: [] });
+  Object.assign(act, { running: true, on: false, samples: [], marks: 0, results: [], final: false });
   $('actResults').innerHTML = '';
   if (transport instanceof SimTransport) transport.brake = false;
   startEngine('act', eng => sniffUntilStop(eng));
   engine.after = () => {
-    act.running = false;
+    act.running = false; act.final = true;
     if (transport instanceof SimTransport) transport.brake = null;
     act.results = A.actionBits(act.samples);
     renderAct(true);
@@ -633,30 +656,30 @@ $('btnAct').onclick = async () => {
 $('btnActOn').onclick = () => {
   act.on = !act.on; if (act.on) act.marks++;
   $('btnActOn').classList.toggle('on', act.on);
-  $('btnActOn').textContent = act.on ? 'Berhenti (sudah lepas)' : 'Saya sedang buat';
+  updateButtons();
   if (transport instanceof SimTransport) transport.brake = act.on;
 };
 function renderAct(final) {
   const on = act.samples.filter(s => s.on).length;
-  if (act.running) $('actInfo').textContent = `${act.samples.length} bingkai · ${act.marks} kali tindakan · ${on} bingkai semasa tindakan`;
+  if (act.running || final) $('actInfo').textContent = t('act.info', { f: act.samples.length, m: act.marks, on });
   if (!final) return;
-  if (act.marks < 1 || on < 3) { $('actResults').innerHTML = '<p class="hint">Tiada tindakan direkod. Tekan "Saya sedang buat" semasa anda buat tindakan itu.</p>'; return; }
-  if (!act.results.length) { $('actResults').innerHTML = '<p class="hint">Tiada bit yang ikut tindakan. Cuba ulang dengan tempoh lebih jelas (tahan 2–3 saat setiap kali).</p>'; return; }
-  const name = $('actName').value.trim() || 'Tindakan';
-  $('actResults').innerHTML = '<h3 class="sec">Bit yang ikut tindakan</h3>' + act.results.map((r, i) => {
+  if (act.marks < 1 || on < 3) { $('actResults').innerHTML = `<p class="hint">${esc(t('act.noMarks'))}</p>`; return; }
+  if (!act.results.length) { $('actResults').innerHTML = `<p class="hint">${esc(t('act.noBits'))}</p>`; return; }
+  const name = $('actName').value.trim() || t('act.default');
+  $('actResults').innerHTML = `<h3 class="sec">${esc(t('act.found'))}</h3>` + act.results.map((r, i) => {
     const pct = Math.round(r.score * 100);
-    return `<div class="cand"><span class="m">ID ${r.id} · bait ${r.byte} bit ${r.bit}</span><span class="m">${pct}%</span><div class="meter"><span style="width:${pct}%"></span></div>`
-      + `<span class="d">${r.activeHigh ? 'bit = 1 semasa tindakan' : 'bit = 0 semasa tindakan'} · bit mula DBC ${r.start}</span><button class="btn small" data-i="${i}">Simpan sebagai ${esc(name)}</button></div>`;
+    return `<div class="cand"><span class="m">ID ${r.id} · ${esc(t('graph.byte'))} ${r.byte} bit ${r.bit}</span><span class="m">${pct}%</span><div class="meter"><span style="width:${pct}%"></span></div>`
+      + `<span class="d">${esc(r.activeHigh ? t('act.high') : t('act.low'))} · ${esc(t('act.dbcStart', { n: r.start }))}</span><button class="btn small" data-i="${i}">${esc(t('learn.saveAs', { name }))}</button></div>`;
   }).join('');
   $('actResults').querySelectorAll('button[data-i]').forEach(b => b.onclick = () => {
     const r = act.results[+b.dataset.i];
     const labels = profile().labels;
-    const l = labels[r.id] || (labels[r.id] = { name: '', source: 'learn', detail: '', signals: [] });
+    const l = labels[r.id] || (labels[r.id] = { name: '', source: 'learn', signals: [] });
     l.signals = (l.signals || []).filter(s => s.name !== name);
-    l.signals.push({ name, id: r.id, start: r.start, length: 1, order: 'intel', signed: false, scale: 1, offset: 0, unit: '', source: 'learn', values: r.activeHigh ? { 1: 'AKTIF', 0: 'tidak' } : { 0: 'AKTIF', 1: 'tidak' } });
-    if (!l.name) l.name = 'Mengandungi ' + name;
-    if (!l.detail) l.detail = 'dari tindakan ' + Math.round(r.score * 100) + '%';
-    saveProfiles(); refreshGraphIndex(); toast(`Disimpan: ID ${r.id} bait ${r.byte} bit ${r.bit} = ${name}`);
+    l.signals.push({ name, id: r.id, start: r.start, length: 1, order: 'intel', signed: false, scale: 1, offset: 0, unit: '', source: 'learn', active: r.activeHigh ? 1 : 0 });
+    if (l.learnPid == null) l.actScore = Math.round(r.score * 100);
+    saveProfiles(); refreshGraphIndex();
+    toast(t('act.saved', { id: r.id, b: r.byte, bit: r.bit, name }));
   });
 }
 
@@ -665,7 +688,7 @@ $('termForm').addEventListener('submit', async e => {
   e.preventDefault();
   const cmd = $('termIn').value.trim().toUpperCase();
   if (!cmd || needConn()) return;
-  if (engine) { toast('Hentikan tangkapan dulu'); return; }
+  if (engine) { toast(t('msg.stopFirst')); return; }
   $('termIn').value = '';
   engine = { kind: 'term' };
   try {
@@ -683,11 +706,11 @@ $('termForm').addEventListener('submit', async e => {
 // ---------- Paparan berkala ----------
 let lastGuess = 0, lastIds = 0;
 function render(force) {
-  const t = now();
-  if (t - lastGuess > 1000 || force) { lastGuess = t; for (const e of hist.ids.values()) guessCache.set(e.id, A.guess(e)); }
+  const tn = now();
+  if (tn - lastGuess > 1000 || force) { lastGuess = tn; for (const e of hist.ids.values()) guessCache.set(e.id, A.guess(e)); }
   if (tab === 'sniff') renderSniff();
   if (tab === 'graf') renderCharts();
-  if (tab === 'ids' && (force || t - lastIds > 1000)) { lastIds = t; renderIds(); }
+  if (tab === 'ids' && (force || tn - lastIds > 1000)) { lastIds = tn; renderIds(); }
   if (tab === 'learn') { if (engine && engine.kind === 'learn') renderLearn(); if (act.running) renderAct(); }
 }
 setInterval(() => { if (!document.hidden) render(); }, 250);
@@ -700,6 +723,5 @@ window.nativeBack = () => {
 };
 addEventListener('resize', () => renderCharts());
 
-renderProfiles();
-buildCharts();
+applyLanguage();
 showTab('conn');

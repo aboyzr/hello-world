@@ -5,6 +5,8 @@
 (function (root) {
   'use strict';
   const Core = root.ObdCore || (typeof require !== 'undefined' ? require('./can-core.js') : null);
+  const fill = (s, v) => String(s).replace(/\{(\w+)\}/g, (m, k) => (v && v[k] != null ? v[k] : m));
+  const tr = (k, fb, v) => (root.I18N ? root.I18N.t(k, v, fb) : fill(fb, v));
 
   class Elm327 {
     constructor(transport, log) {
@@ -39,11 +41,11 @@
     // Hantar arahan dan tunggu prompt '>'. Arahan dibariskan satu demi satu.
     send(cmd, timeout) {
       const run = () => new Promise((resolve, reject) => {
-        if (this.monitor) return reject(new Error('Mod monitor sedang berjalan'));
+        if (this.monitor) return reject(new Error(tr('elm.busy', 'Mod monitor sedang berjalan')));
         this.buf = '';
         this.waiter = {
           resolve: out => { this.log('rx', out.trim()); resolve(out); },
-          timer: setTimeout(() => { this.waiter = null; reject(new Error('Tiada jawapan: ' + cmd)); }, timeout || 4000)
+          timer: setTimeout(() => { this.waiter = null; reject(new Error(tr('elm.noReply', 'Tiada jawapan: {cmd}', { cmd }))); }, timeout || 4000)
         };
         this.log('tx', cmd);
         this.t.write(cmd + '\r');
@@ -64,7 +66,7 @@
       const dpn = Core.cleanLines(await this.send('ATDPN')).join('');
       this.protocol = Core.protocolInfo(dpn);
       const parsed = Core.parseResponse(first, this.protocol);
-      if (parsed.error) throw new Error('Kereta tidak menjawab (' + parsed.error + '). Pastikan suis kunci ON.');
+      if (parsed.error) throw new Error(tr('elm.carSilent', 'Kereta tidak menjawab ({err}). Pastikan suis kunci ON.', { err: parsed.error }));
       return { version: this.version, protocol: this.protocol, ecus: [...new Set(parsed.messages.map(m => m.ecu))] };
     }
 
@@ -117,7 +119,7 @@
 
     // Mula tangkap semua trafik bas CAN. filter = { id: '7E8', mask: '7FF' } (pilihan)
     async startMonitor(onLine, filter, onOverflow, onUnsupported) {
-      if (!this.protocol.can) throw new Error('Sniff CAN hanya untuk kereta protokol CAN');
+      if (!this.protocol.can) throw new Error(tr('elm.canOnly', 'Sniff CAN hanya untuk kereta protokol CAN'));
       await this.send('ATCAF0'); // papar bait PCI (data mentah)
       if (filter && filter.id) {
         await this.send(this.protocol.ext ? 'ATCF' + filter.id.padStart(8, '0') : 'ATCF' + filter.id.padStart(3, '0'));
@@ -162,15 +164,15 @@
 
     // Uji sama ada dongle sokong ATMA dan ada trafik di port OBD
     async probeSniff() {
-      if (!this.protocol.can) return { ok: false, reason: 'Kereta bukan protokol CAN' };
+      if (!this.protocol.can) return { ok: false, reason: tr('elm.notCan', 'Kereta bukan protokol CAN') };
       let frames = 0, unsupported = false;
       await this.send('ATCAF0');
       this._beginMa(l => { if (Core.parseCanFrame(l)) frames++; }, null, () => { unsupported = true; });
       await new Promise(r => setTimeout(r, 800));
       await this._endMa();
       await this.send('ATCAF1').catch(() => {});
-      if (unsupported) return { ok: false, reason: 'Dongle tidak sokong mod sniff (ATMA)' };
-      if (!frames) return { ok: false, reason: 'Tiada trafik CAN di port OBD (mungkin ada gateway). Graf PID masih boleh.' };
+      if (unsupported) return { ok: false, reason: tr('elm.noAtma', 'Dongle tidak sokong mod sniff (ATMA)') };
+      if (!frames) return { ok: false, reason: tr('elm.noTraffic', 'Tiada trafik CAN di port OBD (mungkin ada gateway). Graf PID masih boleh.') };
       return { ok: true, frames };
     }
   }
@@ -182,7 +184,7 @@
     static listDevices(scanBle) {
       return new Promise((resolve, reject) => {
         root.obdNative.onDevices = list => resolve(JSON.parse(list));
-        root.obdNative.onPermission = ok => { if (!ok) reject(new Error('Kebenaran Bluetooth ditolak')); };
+        root.obdNative.onPermission = ok => { if (!ok) reject(new Error(tr('elm.perm', 'Kebenaran Bluetooth ditolak'))); };
         root.obdNative.onError = msg => reject(new Error(msg));
         root.ObdBridge.listDevices(!!scanBle);
       });
@@ -224,7 +226,7 @@
         }
         if (rx && tx) break;
       }
-      if (!rx || !tx) throw new Error('Dongle BLE ini tidak ada servis UART dikenali');
+      if (!rx || !tx) throw new Error(tr('elm.noUart', 'Dongle BLE ini tidak ada servis UART dikenali'));
       this.tx = tx; const dec = new TextDecoder();
       rx.addEventListener('characteristicvaluechanged', e => { const s = dec.decode(e.target.value); this.dataFns.forEach(f => f(s)); });
       await rx.startNotifications();

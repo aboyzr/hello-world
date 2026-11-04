@@ -13,7 +13,8 @@ test('label ID standard OBD dan J1939', () => {
   assert.match(A.standardLabel('18DAF110', true).name, /Jawapan.*0x10/);
   const eec1 = A.standardLabel('0CF00400', true);
   assert.match(eec1.name, /EEC1/);
-  const rpmSig = eec1.signals.find(s => s.name === 'RPM enjin');
+  const rpmSig = eec1.signals.find(s => s.name === 'SPN190');
+  assert.strictEqual(rpmSig.label, 'RPM enjin');
   // RPM 1500 = 12000 * 0.125 => bait 3-4 = E0 2E
   assert.strictEqual(C.extractSignal([0xF0, 0x7D, 0x7D, 0xE0, 0x2E, 0, 0xF0, 0xFF], rpmSig), 1500);
   assert.match(A.standardLabel('18FEEE00', true).name, /ET1/);

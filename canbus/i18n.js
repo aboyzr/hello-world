@@ -1,0 +1,259 @@
+/*
+ * Dua bahasa: English (lalai) dan Bahasa Malaysia.
+ * t(kunci, nilai, ganti) — {nama} dalam teks diganti dengan nilai.
+ * Teks enjin (can-core/analyze/elm327) ada versi BM terbina; kamus BM di sini hanya untuk antara muka.
+ */
+(function (root) {
+  'use strict';
+  const EN = {
+    // umum
+    'common.start': '▶ Start', 'common.stop': '■ Stop', 'common.done': 'Done', 'common.save': 'Save', 'common.close': 'Close',
+    'common.cancel': 'Cancel', 'common.create': 'Create', 'common.yes': 'Yes', 'common.no': 'No', 'common.remove': 'Remove',
+    'pill.off': 'Not connected',
+    'tab.graf': 'Graph', 'tab.sniff': 'Sniff', 'tab.ids': 'IDs', 'tab.learn': 'Learn', 'tab.conn': 'Connect',
+    // sambung
+    'conn.title': 'Connect ELM327 dongle',
+    'conn.step1': 'Plug the dongle into the OBD2 port (under the steering wheel). Turn the key to <b>ON</b> or start the engine.',
+    'conn.step2': '<b>Classic Bluetooth</b> dongle: pair it first in the phone\'s Bluetooth settings (PIN is usually <b>1234</b> or <b>0000</b>), then tap <b>Paired dongles</b>.',
+    'conn.step3': '<b>BLE</b> dongle: no pairing needed, tap <b>Scan BLE</b>.',
+    'conn.list': 'Paired dongles', 'conn.scanBle': 'Scan BLE', 'conn.demo': 'Demo', 'conn.webBle': 'Web Bluetooth (BLE)', 'conn.serial': 'Serial / COM port',
+    'conn.protocol': 'Protocol', 'proto.auto': 'Auto (recommended)', 'proto.6': 'CAN 11-bit 500k (most cars 2008+)', 'proto.7': 'CAN 29-bit 500k',
+    'proto.8': 'CAN 11-bit 250k', 'proto.9': 'CAN 29-bit 250k (J1939 trucks)',
+    'conn.testTitle': 'Dongle & car test', 'conn.disconnect': 'Disconnect',
+    'conn.scanning': 'Scanning for BLE dongles (8 seconds)…', 'conn.reading': 'Reading paired devices…',
+    'conn.noneBle': 'No devices. Make sure the dongle is plugged in and the key is ON.',
+    'conn.nonePaired': 'No devices. Pair the dongle in Bluetooth settings first, or try Scan BLE.',
+    'conn.noName': '(no name)', 'conn.last': 'last used',
+    'conn.connecting': 'Connecting to {name}…', 'conn.init': 'Starting ELM327 and searching for the car\'s protocol (can take 10 seconds)…',
+    'conn.probing': 'Testing sniff mode…', 'conn.okSniff': 'Connected. Try the Sniff or Learn tab.',
+    'conn.okNoSniff': 'Connected. Sniff is not available, but PID graphs work.',
+    'conn.failed': 'Failed: {msg}', 'conn.lost': 'Connection lost', 'conn.lostMsg': 'Disconnected: {msg}',
+    'info.dongle': 'Dongle', 'info.chip': 'Chip', 'info.protocol': 'Protocol', 'info.ecus': 'ECUs answering', 'info.notSupported': 'Not supported',
+    'info.battery': 'Battery voltage', 'info.pids': 'Supported PIDs', 'info.sniff': 'Sniff mode (ATMA)', 'info.sniffOk': 'Supported · {n} frames in 0.8 s',
+    'term.title': 'Terminal (AT / OBD commands)', 'term.ph': 'e.g. ATDP, 010C', 'term.send': 'Send',
+    // mesej
+    'msg.needConn': 'Connect to a dongle first (or tap Demo)', 'msg.notCan': 'This car does not use CAN. Only PID graphs are available.',
+    'msg.bufferFull': 'BUFFER FULL: too much traffic. Use an ID filter.', 'msg.noAtma': 'Dongle does not support ATMA',
+    'msg.hexOnly': 'ID and mask must be hex numbers', 'msg.savedProfile': 'Saved in profile {p}', 'msg.stopFirst': 'Stop capturing first',
+    // graf
+    'graph.pick': '＋ Choose sensors',
+    'graph.empty': 'Choose sensors to show. CAN signals come from the <b>Learn</b> tab, a DBC file or your own labels. Standard PIDs can be chosen too.',
+    'graph.noSniff': 'CAN signals need sniff, which is not available on this car/dongle. Showing PIDs only.',
+    'graph.rate': '{n} PID readings/s', 'graph.missing': 'Signal is not in this profile', 'graph.stdPid': 'Standard PID',
+    'graph.obdQuery': 'OBD request', 'graph.byte': 'byte', 'graph.raw': 'raw', 'graph.value': 'value', 'graph.now': 'now',
+    'pick.title': 'Choose sensors for the graph', 'pick.intro': 'Up to 4. CAN signals need sniff; PIDs are read by request.',
+    'pick.can': 'CAN signals', 'pick.noCan': 'None yet. Use the Learn tab or import a DBC.', 'pick.pid': 'Standard OBD PIDs',
+    // sniff
+    'sniff.capture': '▶ Capture', 'sniff.rec': '● Record', 'sniff.recStop': '■ Stop recording', 'sniff.csv': 'Export CSV',
+    'sniff.filter': 'Filter ID', 'sniff.filterPh': 'empty = all', 'sniff.mask': 'Mask',
+    'sniff.intro': 'Capture every frame on the CAN bus. Changed bytes are highlighted. Tap an ID to name it.',
+    'sniff.data': 'Data (bytes 0–7)', 'sniff.stats': '{f} frames · {ids} IDs · {rate} frames/s', 'sniff.recording': 'recording {n}',
+    'sniff.recorded': '{n} frames recorded', 'sniff.recHint': 'Tap Capture to start receiving frames', 'sniff.recLimit': 'Recording limit reached',
+    'role.counter': 'counter', 'role.checksum': 'checksum', 'role.analog': 'analog', 'role.bit': 'bit/switch', 'role.const': 'constant',
+    // kenal ID
+    'ids.profile': 'Car profile', 'ids.newProfile': '＋ Profile', 'ids.import': 'Import DBC', 'ids.export': 'Export DBC', 'ids.demoDbc': 'Demo DBC',
+    'ids.newProfileTitle': 'New car profile', 'ids.newProfileText': 'For example: Myvi 2018 1.5, Saga VVT 2020. ID labels are saved per profile.',
+    'ids.newProfilePh': 'Car name', 'ids.contains': 'Contains {name}', 'ids.stdId': 'Standard ID', 'ids.guessPct': 'Guess {n}%', 'ids.from': 'from',
+    'ids.notSeen': 'Labels in profile (not seen this session)', 'ids.nSignals': '{n} signals',
+    'ids.stats': '{n} IDs seen · {std} standard · {dbc} DBC · {learn} learned · {user} own · {guess} guess · {unk} unknown',
+    'ids.empty': 'No IDs yet. Start Sniff or Learn to detect IDs on the CAN bus.',
+    'ids.dbcEmpty': 'No BO_ messages in this file. Make sure it is a valid .dbc file.', 'ids.dbcImported': '{n} IDs imported from {f}',
+    'ids.dbcSkipped': '({n} multiplexed signals skipped)', 'ids.demoFail': 'Could not read the demo DBC', 'ids.noLabels': 'This profile has no labels yet',
+    'src.std': 'Standard', 'src.dbc': 'DBC', 'src.learn': 'Learned', 'src.guess': 'Guess', 'src.user': 'Own', 'src.unk': 'Unknown',
+    'dlg.name': 'ID name / function', 'dlg.namePh': 'e.g. Engine data', 'dlg.signals': 'Signals in this ID', 'dlg.addManual': '＋ Add a signal manually',
+    'dlg.sgName': 'Name', 'dlg.sgNamePh': 'e.g. TPS', 'dlg.unit': 'Unit', 'dlg.start': 'Start bit', 'dlg.len': 'Length (bits)', 'dlg.order': 'Byte order',
+    'dlg.intel': 'Intel (little endian)', 'dlg.motorola': 'Motorola (big endian)', 'dlg.signed': 'Signed', 'dlg.scale': 'Scale', 'dlg.offset': 'Offset',
+    'dlg.formulaHelp': 'Value = raw × scale + offset. Intel: start bit = LSB. Motorola: start bit = MSB (DBC numbering). Whole byte 2 = start bit 16, length 8.',
+    'dlg.addSig': 'Add signal', 'dlg.delete': 'Delete label', 'dlg.latest': 'Latest data: {data} · {n} frames', 'dlg.notSeen': 'Not seen this session',
+    'dlg.j1939': 'J1939 standard', 'dlg.noSignals': 'No signals yet. Use the Learn tab, import a DBC, or add one manually.',
+    'dlg.needName': 'Enter a signal name', 'dlg.badBits': 'Start bit 0–63, length 1–32',
+    'dlg.delTitle': 'Delete label for ID {id}?', 'dlg.delText': 'The name and signals for this ID in profile "{p}" will be removed.',
+    // belajar
+    'learn.pidTitle': 'Compare with a standard PID',
+    'learn.pidIntro': 'The app reads a sensor through its standard PID and records every CAN frame in between. Bytes that move together with the sensor are listed.',
+    'learn.ref': 'Reference sensor', 'learn.start': '▶ Start learning', 'learn.stop': '■ Stop & show results',
+    'learn.noSniff': 'This dongle/car does not give sniff traffic, so IDs cannot be learned.',
+    'learn.fromPid': '{name} from PID', 'learn.info': '{s} s · {n} reference readings · {ids} IDs',
+    'learn.none': 'No matching bytes yet. Keep changing the sensor.', 'learn.best': 'Best candidates', 'learn.sofar': 'Candidates so far',
+    'learn.now': 'now', 'learn.inverse': 'inverse direction', 'learn.saveAs': 'Save as {name}',
+    'learn.explain': 'Percentage = how closely the byte moves with the PID (correlation). 90% and above is usually correct. Several IDs may carry the same signal.',
+    'learn.saved': 'Saved: ID {id} {b} = {name}. See the Graph tab.', 'learn.matchDetail': 'matches PID 01 {pid} {n}%',
+    'hint.default': 'Change this sensor\'s state while recording.',
+    'hint.11': 'Engine OFF, key ON. Press the accelerator slowly all the way down, then release. Repeat 3–4 times within 20 seconds.',
+    'hint.0C': 'Engine running, gear P/N, handbrake on. Raise the RPM slowly to 3000 and back down, a few times.',
+    'hint.0D': 'The car must move: ask someone else to drive, or safely lift the driven wheels on a jack.',
+    'hint.05': 'Start a cold engine and record for 5–10 minutes while the temperature rises. Leave the phone on the dashboard.',
+    'hint.04': 'Engine running. Raise and lower the RPM a few times.', 'hint.0B': 'Engine running. Raise and lower the RPM a few times.',
+    'hint.10': 'Engine running. Raise and lower the RPM a few times.', 'hint.0F': 'Record a little longer (5 minutes) while the engine warms up. This value changes slowly.',
+    'hint.2F': 'Fuel level changes very slowly and is hard to learn in one session.', 'hint.42': 'Switch the headlights / air-con on and off to change the voltage.',
+    'hint.5C': 'Record for a few minutes while the engine warms up.', 'hint.46': 'Changes slowly. Hard to learn in one session.',
+    'act.title': 'Learn from an action',
+    'act.intro': 'For switches with no PID: brake, doors, lights, indicators, horn. Start capturing, then tap <b>I\'m doing it</b> each time you do the action, and <b>Stop</b> when you release. Repeat 3 times.',
+    'act.name': 'Action name', 'act.namePh': 'e.g. Brake pedal pressed', 'act.default': 'Brake pedal pressed',
+    'act.start': '▶ Start capturing', 'act.on': 'I\'m doing it', 'act.off': 'Stop (released)',
+    'act.info': '{f} frames · {m} actions · {on} frames during action',
+    'act.noMarks': 'No action recorded. Tap "I\'m doing it" while you do the action.',
+    'act.noBits': 'No bit followed the action. Try again with clearer timing (hold 2–3 seconds each time).',
+    'act.found': 'Bits that follow the action', 'act.high': 'bit = 1 during action', 'act.low': 'bit = 0 during action', 'act.dbcStart': 'DBC start bit {n}',
+    'act.saved': 'Saved: ID {id} byte {b} bit {bit} = {name}', 'act.active': 'ACTIVE', 'act.inactive': 'off', 'act.detail': 'from action {n}%',
+    // enjin (can-core / analyze / elm327)
+    'proto.unknown': 'Unknown', 'proto.name.5': 'ISO 14230-4 KWP (fast)', 'proto.name.B': 'User CAN 1', 'proto.name.C': 'User CAN 2',
+    'mil.on': 'MIL ON', 'mil.off': 'MIL off',
+    'fuel.1': 'Petrol', 'fuel.2': 'Methanol', 'fuel.3': 'Ethanol', 'fuel.4': 'Diesel', 'fuel.5': 'LPG', 'fuel.6': 'CNG', 'fuel.8': 'Electric',
+    'fuel.17': 'Petrol hybrid', 'fuel.19': 'Diesel hybrid', 'fuel.21': 'Electric hybrid', 'fuel.other': 'Type {n}',
+    'obdstd.1': 'OBD-II (CARB)', 'obdstd.2': 'OBD (EPA)', 'obdstd.3': 'OBD + OBD-II', 'obdstd.6': 'EOBD (Europe)', 'obdstd.7': 'EOBD + OBD-II',
+    'obdstd.9': 'EOBD + OBD + OBD-II', 'obdstd.11': 'JOBD (Japan)', 'obdstd.13': 'JOBD + EOBD + OBD-II', 'obdstd.other': 'Code {n}',
+    'pid.04': 'Engine load', 'pid.05': 'Coolant temperature', 'pid.06': 'Short term fuel trim B1', 'pid.07': 'Long term fuel trim B1',
+    'pid.08': 'Short term fuel trim B2', 'pid.09': 'Long term fuel trim B2', 'pid.0A': 'Fuel pressure', 'pid.0B': 'Intake manifold pressure (MAP)',
+    'pid.0C': 'Engine RPM', 'pid.0D': 'Vehicle speed', 'pid.0E': 'Timing advance', 'pid.0F': 'Intake air temperature', 'pid.10': 'MAF air flow',
+    'pid.11': 'Throttle position', 'pid.1F': 'Run time since engine start', 'pid.21': 'Distance with MIL on', 'pid.23': 'Fuel rail pressure',
+    'pid.2C': 'Commanded EGR', 'pid.2F': 'Fuel level', 'pid.31': 'Distance since codes cleared', 'pid.33': 'Barometric pressure',
+    'pid.3C': 'Catalyst temperature B1S1', 'pid.42': 'Control module voltage', 'pid.43': 'Absolute load', 'pid.44': 'Air/fuel ratio (lambda)',
+    'pid.45': 'Relative throttle', 'pid.46': 'Ambient air temperature', 'pid.49': 'Accelerator pedal D', 'pid.4C': 'Throttle actuator',
+    'pid.51': 'Fuel type', 'pid.5A': 'Relative accelerator pedal', 'pid.5C': 'Engine oil temperature', 'pid.5E': 'Fuel rate',
+    'pid.01': 'Monitor status (MIL)', 'pid.14': 'O2 sensor B1S1', 'pid.15': 'O2 sensor B1S2', 'pid.1C': 'OBD standard',
+    'pid.30': 'Warm-ups since codes cleared', 'pid.4D': 'Time run with MIL on', 'pid.4E': 'Time since codes cleared', 'pid.A6': 'Odometer',
+    'an.ecu0': 'engine (ECM)', 'an.ecu1': 'transmission (TCM)', 'an.ecu2': 'ECU #3 (often ABS)', 'an.ecu3': 'ECU #4', 'an.ecu4': 'ECU #5',
+    'an.ecu5': 'ECU #6', 'an.ecu6': 'ECU #7', 'an.ecu7': 'ECU #8',
+    'an.reqAll': 'OBD diagnostic request to all ECUs', 'an.reqAll29': 'OBD 29-bit diagnostic request to all ECUs',
+    'an.reqTo': 'Diagnostic request to {ecu}', 'an.respFrom': 'Diagnostic response from {ecu}', 'an.j1939detail': 'J1939 PGN {pgn} from address {src}',
+    'an.collecting': 'Collecting data…', 'an.wheels': 'Probably 4 wheel speeds (ABS)', 'an.wheelsD': '4 nearly equal 16-bit {e} endian values',
+    'an.const': 'Constant data (status / configuration)', 'an.constD': 'no bytes change', 'an.switch': 'Probably a switch / on-off status',
+    'an.switchD': '{n} bit bytes', 'an.steer': 'Probably steering angle / signed value', 'an.steerD': 'value crosses zero',
+    'an.analog': '{n} analog signal bytes (sensor)', 'an.changing': 'Changing signal',
+    'an.refFlat': 'The reference value did not change. Change the condition (e.g. press the pedal) while recording.',
+    'j1939.pgn61444': 'EEC1 · Electronic engine controller 1', 'j1939.pgn61443': 'EEC2 · Electronic engine controller 2',
+    'j1939.pgn65262': 'ET1 · Engine temperature', 'j1939.pgn65263': 'EFL/P1 · Engine fluid level/pressure', 'j1939.pgn65265': 'CCVS · Vehicle speed / cruise',
+    'j1939.pgn65266': 'LFE · Fuel economy', 'j1939.pgn65270': 'IC1 · Inlet/exhaust conditions', 'j1939.pgn65271': 'VEP1 · Vehicle electrical power',
+    'j1939.pgn65276': 'DD · Dash display', 'j1939.pgn65253': 'HOURS · Engine hours', 'j1939.pgn65226': 'DM1 · Active fault codes (J1939)',
+    'j1939.pgn59904': 'PGN request (J1939)',
+    'j1939.spn513': 'Actual engine torque', 'j1939.spn190': 'Engine RPM', 'j1939.spn91': 'Accelerator pedal 1', 'j1939.spn92': 'Engine load',
+    'j1939.spn110': 'Coolant temperature', 'j1939.spn174': 'Fuel temperature', 'j1939.spn175': 'Engine oil temperature', 'j1939.spn100': 'Engine oil pressure',
+    'j1939.spn84': 'Wheel-based speed', 'j1939.spn183': 'Fuel rate', 'j1939.spn102': 'Boost pressure', 'j1939.spn105': 'Intake manifold temperature',
+    'j1939.spn168': 'Battery voltage', 'j1939.spn96': 'Fuel level', 'j1939.spn247': 'Total engine hours',
+    'elm.busy': 'Monitor mode is running', 'elm.noReply': 'No reply: {cmd}', 'elm.carSilent': 'The car is not answering ({err}). Make sure the key is ON.',
+    'elm.canOnly': 'CAN sniff only works on CAN protocol cars', 'elm.notCan': 'Car is not on a CAN protocol', 'elm.noAtma': 'Dongle does not support sniff mode (ATMA)',
+    'elm.noTraffic': 'No CAN traffic on the OBD port (there may be a gateway). PID graphs still work.', 'elm.perm': 'Bluetooth permission denied',
+    'elm.noUart': 'This BLE dongle has no known UART service',
+    'dtc.generic': 'Generic code', 'dtc.maker': 'Manufacturer-specific code', 'dtc.sys.P': 'Powertrain (engine/transmission)',
+    'dtc.sys.C': 'Chassis (ABS/steering)', 'dtc.sys.B': 'Body (airbag/lights/air-con)', 'dtc.sys.U': 'Network (CAN communication)'
+  };
+
+  const MS = {
+    'common.start': '▶ Mula', 'common.stop': '■ Henti', 'common.done': 'Siap', 'common.save': 'Simpan', 'common.close': 'Tutup',
+    'common.cancel': 'Batal', 'common.create': 'Cipta', 'common.yes': 'Ya', 'common.no': 'Tidak', 'common.remove': 'Buang',
+    'pill.off': 'Belum bersambung',
+    'tab.graf': 'Graf', 'tab.sniff': 'Sniff', 'tab.ids': 'Kenal ID', 'tab.learn': 'Belajar', 'tab.conn': 'Sambung',
+    'conn.title': 'Sambung dongle ELM327',
+    'conn.step1': 'Cucuk dongle ke port OBD2 (bawah stereng). Kunci <b>ON</b> atau hidupkan enjin.',
+    'conn.step2': 'Dongle <b>Bluetooth biasa</b>: pair dulu di Tetapan Bluetooth telefon (PIN biasanya <b>1234</b> atau <b>0000</b>), kemudian tekan <b>Senarai dongle</b>.',
+    'conn.step3': 'Dongle <b>BLE</b>: tak perlu pair, tekan <b>Cari BLE</b>.',
+    'conn.list': 'Senarai dongle', 'conn.scanBle': 'Cari BLE', 'conn.demo': 'Demo', 'conn.webBle': 'Web Bluetooth (BLE)', 'conn.serial': 'Port Serial / COM',
+    'conn.protocol': 'Protokol', 'proto.auto': 'Auto (disyorkan)', 'proto.6': 'CAN 11-bit 500k (kebanyakan kereta 2008+)', 'proto.7': 'CAN 29-bit 500k',
+    'proto.8': 'CAN 11-bit 250k', 'proto.9': 'CAN 29-bit 250k (lori J1939)',
+    'conn.testTitle': 'Ujian dongle & kereta', 'conn.disconnect': 'Putus sambungan',
+    'conn.scanning': 'Mencari dongle BLE (8 saat)…', 'conn.reading': 'Membaca peranti yang telah dipair…',
+    'conn.noneBle': 'Tiada peranti. Pastikan dongle dicucuk dan kunci ON.',
+    'conn.nonePaired': 'Tiada peranti. Pair dongle di Tetapan Bluetooth dulu, atau cuba Cari BLE.',
+    'conn.noName': '(tiada nama)', 'conn.last': 'terakhir',
+    'conn.connecting': 'Menyambung ke {name}…', 'conn.init': 'Memulakan ELM327 dan mencari protokol kereta (boleh ambil 10 saat)…',
+    'conn.probing': 'Menguji mod sniff…', 'conn.okSniff': 'Bersambung. Cuba tab Sniff atau Belajar.',
+    'conn.okNoSniff': 'Bersambung. Sniff tidak tersedia, tapi graf PID boleh.',
+    'conn.failed': 'Gagal: {msg}', 'conn.lost': 'Sambungan terputus', 'conn.lostMsg': 'Terputus: {msg}',
+    'info.dongle': 'Dongle', 'info.chip': 'Cip', 'info.protocol': 'Protokol', 'info.ecus': 'ECU menjawab', 'info.notSupported': 'Tidak disokong',
+    'info.battery': 'Voltan bateri', 'info.pids': 'PID disokong', 'info.sniff': 'Mod sniff (ATMA)', 'info.sniffOk': 'Disokong · {n} bingkai dalam 0.8 s',
+    'term.title': 'Terminal (arahan AT / OBD)', 'term.ph': 'cth ATDP, 010C', 'term.send': 'Hantar',
+    'msg.needConn': 'Sambung ke dongle dulu (atau tekan Demo)', 'msg.notCan': 'Kereta ini bukan protokol CAN. Hanya graf PID boleh.',
+    'msg.bufferFull': 'BUFFER FULL: terlalu banyak trafik. Guna tapis ID.', 'msg.noAtma': 'Dongle tidak sokong ATMA',
+    'msg.hexOnly': 'ID dan mask mesti nombor hex', 'msg.savedProfile': 'Disimpan dalam profil {p}', 'msg.stopFirst': 'Hentikan tangkapan dulu',
+    'graph.pick': '＋ Pilih sensor',
+    'graph.empty': 'Pilih sensor untuk dipapar. Isyarat CAN datang dari tab <b>Belajar</b>, fail DBC atau label anda sendiri. PID standard juga boleh dipilih.',
+    'graph.noSniff': 'Isyarat CAN perlukan sniff, yang tidak tersedia pada kereta/dongle ini. Hanya PID dipapar.',
+    'graph.rate': '{n} bacaan PID/s', 'graph.missing': 'Isyarat tiada dalam profil ini', 'graph.stdPid': 'PID standard',
+    'graph.obdQuery': 'soal-jawab OBD', 'graph.byte': 'bait', 'graph.raw': 'mentah', 'graph.value': 'nilai', 'graph.now': 'sekarang',
+    'pick.title': 'Pilih sensor untuk graf', 'pick.intro': 'Maksimum 4. Isyarat CAN perlukan sniff; PID dibaca dengan soal-jawab.',
+    'pick.can': 'Isyarat CAN', 'pick.noCan': 'Belum ada. Guna tab Belajar atau import DBC.', 'pick.pid': 'PID standard OBD',
+    'sniff.capture': '▶ Tangkap', 'sniff.rec': '● Rakam', 'sniff.recStop': '■ Henti rakam', 'sniff.csv': 'Eksport CSV',
+    'sniff.filter': 'Tapis ID', 'sniff.filterPh': 'kosong = semua', 'sniff.mask': 'Mask',
+    'sniff.intro': 'Tangkap semua bingkai di bas CAN. Bait yang berubah diwarnakan. Tekan satu ID untuk namakan.',
+    'sniff.data': 'Data (bait 0–7)', 'sniff.stats': '{f} bingkai · {ids} ID · {rate} bingkai/s', 'sniff.recording': 'merakam {n}',
+    'sniff.recorded': '{n} bingkai dirakam', 'sniff.recHint': 'Tekan Tangkap untuk mula menerima bingkai', 'sniff.recLimit': 'Had rakaman dicapai',
+    'role.counter': 'counter', 'role.checksum': 'checksum', 'role.analog': 'analog', 'role.bit': 'bit/suis', 'role.const': 'tetap',
+    'ids.profile': 'Profil kereta', 'ids.newProfile': '＋ Profil', 'ids.import': 'Import DBC', 'ids.export': 'Eksport DBC', 'ids.demoDbc': 'DBC demo',
+    'ids.newProfileTitle': 'Profil kereta baru', 'ids.newProfileText': 'Contoh: Myvi 2018 1.5, Saga VVT 2020. Label ID disimpan ikut profil.',
+    'ids.newProfilePh': 'Nama kereta', 'ids.contains': 'Mengandungi {name}', 'ids.stdId': 'ID standard', 'ids.guessPct': 'Tekaan {n}%', 'ids.from': 'dari',
+    'ids.notSeen': 'Label dalam profil (belum dikesan sesi ini)', 'ids.nSignals': '{n} isyarat',
+    'ids.stats': '{n} ID dikesan · {std} standard · {dbc} DBC · {learn} dipelajari · {user} sendiri · {guess} tekaan · {unk} belum dikenal',
+    'ids.empty': 'Belum ada ID. Mula Sniff atau Belajar untuk mengesan ID di bas CAN.',
+    'ids.dbcEmpty': 'Tiada mesej BO_ dalam fail ini. Pastikan fail .dbc yang betul.', 'ids.dbcImported': '{n} ID diimport dari {f}',
+    'ids.dbcSkipped': '({n} isyarat multiplex dilangkau)', 'ids.demoFail': 'Gagal baca DBC demo', 'ids.noLabels': 'Profil ini belum ada label',
+    'src.std': 'Standard', 'src.dbc': 'DBC', 'src.learn': 'Dipelajari', 'src.guess': 'Tekaan', 'src.user': 'Sendiri', 'src.unk': 'Belum dikenal',
+    'dlg.name': 'Nama / fungsi ID', 'dlg.namePh': 'cth Data enjin', 'dlg.signals': 'Isyarat dalam ID ini', 'dlg.addManual': '＋ Tambah isyarat manual',
+    'dlg.sgName': 'Nama', 'dlg.sgNamePh': 'cth TPS', 'dlg.unit': 'Unit', 'dlg.start': 'Bit mula', 'dlg.len': 'Panjang (bit)', 'dlg.order': 'Susunan bait',
+    'dlg.intel': 'Intel (little endian)', 'dlg.motorola': 'Motorola (big endian)', 'dlg.signed': 'Bertanda', 'dlg.scale': 'Skala', 'dlg.offset': 'Ofset',
+    'dlg.formulaHelp': 'Nilai = mentah × skala + ofset. Intel: bit mula = LSB. Motorola: bit mula = MSB (penomboran DBC). Bait 2 penuh = bit mula 16, panjang 8.',
+    'dlg.addSig': 'Tambah isyarat', 'dlg.delete': 'Padam label', 'dlg.latest': 'Data terkini: {data} · {n} bingkai', 'dlg.notSeen': 'Belum dikesan sesi ini',
+    'dlg.j1939': 'J1939 standard', 'dlg.noSignals': 'Tiada isyarat lagi. Guna tab Belajar, import DBC, atau tambah manual.',
+    'dlg.needName': 'Isi nama isyarat', 'dlg.badBits': 'Bit mula 0–63, panjang 1–32',
+    'dlg.delTitle': 'Padam label ID {id}?', 'dlg.delText': 'Nama dan isyarat untuk ID ini dalam profil "{p}" akan dibuang.',
+    'learn.pidTitle': 'Banding dengan PID standard',
+    'learn.pidIntro': 'App baca sensor melalui PID standard, dan berselang-seli rakam semua bingkai CAN. Bait yang bergerak sama dengan sensor itu disenaraikan.',
+    'learn.ref': 'Sensor rujukan', 'learn.start': '▶ Mula belajar', 'learn.stop': '■ Henti & lihat hasil',
+    'learn.noSniff': 'Dongle/kereta ini tidak beri trafik sniff, jadi tidak boleh belajar ID.',
+    'learn.fromPid': '{name} dari PID', 'learn.info': '{s} s · {n} bacaan rujukan · {ids} ID',
+    'learn.none': 'Belum ada bait yang sepadan. Teruskan ubah keadaan sensor.', 'learn.best': 'Calon terbaik', 'learn.sofar': 'Calon setakat ini',
+    'learn.now': 'kini', 'learn.inverse': 'arah terbalik', 'learn.saveAs': 'Simpan sebagai {name}',
+    'learn.explain': 'Peratus = sejauh mana bait itu bergerak seiring PID (korelasi). 90% ke atas biasanya tepat. Beberapa ID mungkin bawa isyarat yang sama.',
+    'learn.saved': 'Disimpan: ID {id} {b} = {name}. Lihat di tab Graf.', 'learn.matchDetail': 'padan PID 01 {pid} {n}%',
+    'hint.default': 'Ubah keadaan sensor ini semasa merakam.',
+    'hint.11': 'Enjin MATI, kunci ON. Tekan pedal minyak perlahan-lahan sampai habis, kemudian lepas. Ulang 3–4 kali dalam 20 saat.',
+    'hint.0C': 'Enjin hidup, gear P/N, brek tangan. Naikkan RPM perlahan ke 3000 dan turun semula, beberapa kali.',
+    'hint.0D': 'Kereta perlu bergerak: minta orang lain memandu, atau angkat roda pemacu di atas jack dengan selamat.',
+    'hint.05': 'Hidupkan enjin sejuk dan rakam 5–10 minit semasa suhu naik. Biar telefon di atas dashboard.',
+    'hint.04': 'Enjin hidup. Naikkan dan turunkan RPM beberapa kali.', 'hint.0B': 'Enjin hidup. Naikkan dan turunkan RPM beberapa kali.',
+    'hint.10': 'Enjin hidup. Naikkan dan turunkan RPM beberapa kali.', 'hint.0F': 'Rakam lama sedikit (5 minit) semasa enjin panas. Nilai ini berubah perlahan.',
+    'hint.2F': 'Paras minyak berubah sangat perlahan, sukar dipelajari dalam satu sesi.', 'hint.42': 'Hidupkan dan matikan lampu besar / aircond untuk ubah voltan.',
+    'hint.5C': 'Rakam beberapa minit semasa enjin panas.', 'hint.46': 'Berubah perlahan. Sukar dipelajari dalam satu sesi.',
+    'act.title': 'Belajar dari tindakan',
+    'act.intro': 'Untuk suis yang tiada PID: brek, pintu, lampu, signal, hon. Mula tangkap, kemudian tekan <b>Saya sedang buat</b> setiap kali anda buat tindakan itu, dan <b>Berhenti</b> bila lepas. Ulang 3 kali.',
+    'act.name': 'Nama tindakan', 'act.namePh': 'cth Pedal brek ditekan', 'act.default': 'Pedal brek ditekan',
+    'act.start': '▶ Mula tangkap', 'act.on': 'Saya sedang buat', 'act.off': 'Berhenti (sudah lepas)',
+    'act.info': '{f} bingkai · {m} kali tindakan · {on} bingkai semasa tindakan',
+    'act.noMarks': 'Tiada tindakan direkod. Tekan "Saya sedang buat" semasa anda buat tindakan itu.',
+    'act.noBits': 'Tiada bit yang ikut tindakan. Cuba ulang dengan tempoh lebih jelas (tahan 2–3 saat setiap kali).',
+    'act.found': 'Bit yang ikut tindakan', 'act.high': 'bit = 1 semasa tindakan', 'act.low': 'bit = 0 semasa tindakan', 'act.dbcStart': 'bit mula DBC {n}',
+    'act.saved': 'Disimpan: ID {id} bait {b} bit {bit} = {name}', 'act.active': 'AKTIF', 'act.inactive': 'tidak', 'act.detail': 'dari tindakan {n}%'
+  };
+
+  const DICT = { en: EN, ms: MS };
+  const fill = (s, v) => String(s).replace(/\{(\w+)\}/g, (m, k) => (v && v[k] != null ? v[k] : m));
+  let saved = null;
+  try { saved = localStorage.getItem('canbus.lang'); } catch (e) { /* storan disekat */ }
+
+  const I18N = {
+    lang: saved === 'ms' ? 'ms' : 'en',
+    t(key, vars, fallback) {
+      const d = DICT[I18N.lang];
+      let s = d[key];
+      if (s == null && I18N.lang === 'ms' && fallback != null) s = fallback;   // teks enjin BM terbina
+      if (s == null) s = EN[key];
+      if (s == null) s = fallback != null ? fallback : key;
+      return fill(s, vars);
+    },
+    set(lang) {
+      I18N.lang = lang === 'ms' ? 'ms' : 'en';
+      try { localStorage.setItem('canbus.lang', I18N.lang); } catch (e) { /* abaikan */ }
+    },
+    // Isi teks statik: data-i18n (teks), data-i18n-html (dengan <b>), data-i18n-ph (placeholder)
+    apply(rootEl) {
+      rootEl.documentElement && (rootEl.documentElement.lang = I18N.lang);
+      rootEl.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = I18N.t(el.dataset.i18n); });
+      rootEl.querySelectorAll('[data-i18n-html]').forEach(el => { el.innerHTML = I18N.t(el.dataset.i18nHtml); });
+      rootEl.querySelectorAll('[data-i18n-ph]').forEach(el => { el.placeholder = I18N.t(el.dataset.i18nPh); });
+    },
+    keys: { en: EN, ms: MS }
+  };
+  I18N.t = I18N.t.bind(I18N);
+  if (typeof module !== 'undefined' && module.exports) module.exports = I18N;
+  else root.I18N = I18N;
+})(typeof self !== 'undefined' ? self : this);
