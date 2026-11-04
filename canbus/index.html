@@ -40,6 +40,11 @@
         <button class="btn" id="btnRec"></button>
         <button class="btn" id="btnCsv" disabled data-i18n="sniff.csv"></button>
       </div>
+      <div class="bar base-bar">
+        <button class="btn" id="btnBase"></button>
+        <button class="btn" id="btnOnlyChg" aria-pressed="false" data-i18n="base.only"></button>
+        <span class="sub" id="baseInfo" data-i18n="base.intro"></span>
+      </div>
       <div class="bar">
         <label class="field inline" for="filtId"><span data-i18n="sniff.filter"></span><input id="filtId" data-i18n-ph="sniff.filterPh" maxlength="8" autocapitalize="characters"></label>
         <label class="field inline" for="filtMask"><span data-i18n="sniff.mask"></span><input id="filtMask" placeholder="7FF" maxlength="8" autocapitalize="characters"></label>
@@ -67,6 +72,16 @@
 
     <!-- ============ LEARN ============ -->
     <section class="view" id="view-learn" hidden>
+      <section class="card resume" id="resumeCard" hidden>
+        <h2 data-i18n="resume.title"></h2>
+        <p class="sub" id="resumeText"></p>
+        <div class="bar">
+          <button class="btn primary" id="btnResume" data-i18n="resume.continue"></button>
+          <button class="btn" id="btnResumeView" data-i18n="resume.view"></button>
+          <button class="btn danger" id="btnResumeDrop" data-i18n="resume.drop"></button>
+        </div>
+      </section>
+
       <section class="card">
         <h2 data-i18n="learn.pidTitle"></h2>
         <p class="sub" data-i18n="learn.pidIntro"></p>
@@ -78,6 +93,24 @@
         </div>
         <div class="big-ref" id="learnRef" hidden></div>
         <div id="learnResults"></div>
+      </section>
+
+      <section class="card">
+        <h2 data-i18n="find.title"></h2>
+        <p class="sub" data-i18n="find.intro"></p>
+        <div class="two">
+          <label class="field" for="findVal"><span data-i18n="find.value"></span><input id="findVal" type="number" step="any" inputmode="decimal" data-i18n-ph="find.valuePh"></label>
+          <label class="field" for="findTol"><span data-i18n="find.tol"></span>
+            <select id="findTol"><option value="0.0005">±0.05%</option><option value="0.01" selected>±1%</option><option value="0.03">±3%</option><option value="0.08">±8%</option></select>
+          </label>
+        </div>
+        <div class="bar">
+          <button class="btn primary" id="btnFind" data-i18n="find.search"></button>
+          <button class="btn" id="btnFindAgain" disabled data-i18n="find.again"></button>
+          <button class="btn" id="btnFindReset" disabled data-i18n="find.reset"></button>
+        </div>
+        <p class="sub" id="findInfo"></p>
+        <div id="findResults"></div>
       </section>
 
       <section class="card">
@@ -161,6 +194,8 @@
     <form method="dialog" class="dlg" id="idForm">
       <h2 id="idDlgTitle">ID</h2>
       <p class="mono sub" id="idDlgRaw"></p>
+      <div class="bytes" id="idBytes"></div>
+      <p class="sub" data-i18n="bytes.help"></p>
       <label class="field" for="idName"><span data-i18n="dlg.name"></span><input id="idName" name="name" data-i18n-ph="dlg.namePh"></label>
       <h3 class="sec" data-i18n="dlg.signals"></h3>
       <ul class="list" id="idSigs"></ul>

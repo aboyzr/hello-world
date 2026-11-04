@@ -204,7 +204,10 @@
       }
       if (pairs.length < Math.max(6, ref.length * 0.6)) continue;
       const len = Math.min(...pairs.map(p => p.d.length));
+      const varies = Array.from({ length: len }, (_, i) => new Set(pairs.map(p => p.d[i])).size > 1);
       for (const c of candidatesFor(len)) {
+        // calon berbilang bait dengan satu bait tetap sama sahaja dengan calon lebih pendek — langkau
+        if (c.bytes.length > 1 && c.bytes.some(b => !varies[b])) continue;
         const raw = pairs.map(p => Core.extractSignal(p.d, c));
         const y = pairs.map(p => p.v);
         if (new Set(raw).size < 3) continue;
@@ -250,7 +253,98 @@
     return out.slice(0, top || 8);
   }
 
-  const api = { J1939, j1939Pgn, standardLabel, History, byteRoles, guess, correlate, actionBits, pearson, candidatesFor };
+
+  // ---------- Asas (baseline): tunjuk hanya yang berubah ----------
+  // Semasa mengumpul asas, catat bit yang memang berubah-ubah. Selepas itu, mana-mana bit lain yang
+  // berubah, atau ID baru, ditanda "berubah" (melekat sehingga set semula).
+  class Baseline {
+    constructor() { this.ids = new Map(); this.state = 'idle'; this.changes = new Map(); }
+    start() { this.ids.clear(); this.changes.clear(); this.state = 'collect'; }
+    finish() { this.state = this.ids.size ? 'ready' : 'idle'; }
+    reset() { this.ids.clear(); this.changes.clear(); this.state = 'idle'; }
+    add(f) {
+      if (this.state === 'collect') {
+        let b = this.ids.get(f.id);
+        if (!b) { b = { or: f.data.slice(), and: f.data.slice() }; this.ids.set(f.id, b); }
+        f.data.forEach((v, i) => { b.or[i] = (b.or[i] || 0) | v; b.and[i] = b.and[i] === undefined ? v : b.and[i] & v; });
+        return null;
+      }
+      if (this.state !== 'ready') return null;
+      const b = this.ids.get(f.id);
+      let c = this.changes.get(f.id);
+      if (!b) {
+        if (!c) { c = { isNew: true, mask: f.data.map(() => 0xff), t: f.t, count: 0 }; this.changes.set(f.id, c); }
+        c.count++; c.last = f.t;
+        return c;
+      }
+      let hit = false;
+      f.data.forEach((v, i) => {
+        if (b.or[i] === undefined) return;
+        const steady = ~(b.or[i] ^ b.and[i]) & 0xff;          // bit yang tetap semasa asas
+        const diff = (v ^ b.and[i]) & steady;
+        if (diff) {
+          if (!c) { c = { isNew: false, mask: [], t: f.t, count: 0 }; this.changes.set(f.id, c); }
+          c.mask[i] = (c.mask[i] || 0) | diff; hit = true;
+        }
+      });
+      if (hit) { c.count++; c.last = f.t; }
+      return hit ? c : null;
+    }
+  }
+
+  // ---------- Cari nilai yang dilihat di meter ----------
+  const SCALES = [1, 0.1, 0.01, 0.001, 0.5, 0.25, 0.125, 0.05, 0.4, 100 / 255, 0.75, 2, 4, 10];
+  const OFFSETS = [0, -40, -48];
+  function searchCandidates(len) {
+    const out = [];
+    for (const bits of [8, 16, 24, 32]) {
+      const n = bits / 8;
+      for (let i = 0; i + n <= len; i++) {
+        out.push({ bytes: Array.from({ length: n }, (_, k) => i + k), start: i * 8, length: bits, order: 'intel', end: n > 1 ? 'LE' : '' });
+        if (n > 1) out.push({ bytes: Array.from({ length: n }, (_, k) => i + k), start: i * 8 + 7, length: bits, order: 'motorola', end: 'BE' });
+      }
+    }
+    return out;
+  }
+  const keyOf = c => [c.id, c.start, c.length, c.order, c.scale, c.offset].join(':');
+
+  /*
+   * latest = Map id -> data terkini. value = nombor di meter. tol = peratus (0.02 = 2%).
+   * prev = calon carian sebelum ini (tapis: hanya simpan yang masih sepadan dengan nilai baru).
+   * skip = Map id -> peranan bait (abaikan counter/checksum).
+   */
+  function searchValue(latest, value, tol, prev, skip) {
+    const out = [];
+    const ok = (v, scale) => Math.abs(v - value) <= Math.max(Math.abs(value) * tol, scale * 0.51);
+    if (prev) {
+      for (const c of prev) {
+        const d = latest.get(c.id); if (!d) continue;
+        const v = Core.extractSignal(d, c);
+        if (v != null && ok(v, c.scale)) out.push(Object.assign({}, c, { value: v }));
+      }
+      return out;
+    }
+    for (const [id, d] of latest) {
+      const roles = (skip && skip.get(id)) || [];
+      for (const cand of searchCandidates(d.length)) {
+        if (cand.bytes.some(b => roles[b] === 'counter' || roles[b] === 'checksum')) continue;
+        const raw = Core.extractSignal(d, cand);
+        if (raw == null || raw === 0) continue;
+        for (const scale of SCALES) for (const offset of OFFSETS) {
+          const v = raw * scale + offset;
+          if (!ok(v, scale)) continue;
+          const c = Object.assign({ id, scale: Math.round(scale * 1e6) / 1e6, offset, value: Math.round(v * 1e6) / 1e6 }, cand);
+          out.push(c);
+        }
+      }
+    }
+    // Paling munasabah dulu: skala 1 & ofset 0, bit lebih sedikit, nilai paling hampir
+    const cost = c => (c.scale === 1 ? 0 : 1) + (c.offset ? 1 : 0) + c.length / 32 + Math.abs(c.value - value) / Math.max(1, Math.abs(value));
+    out.sort((a, b) => cost(a) - cost(b));
+    return out;
+  }
+
+  const api = { Baseline, searchValue, searchKey: keyOf, J1939, j1939Pgn, standardLabel, History, byteRoles, guess, correlate, actionBits, pearson, candidatesFor };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Analyze = api;
 })(typeof self !== 'undefined' ? self : this);

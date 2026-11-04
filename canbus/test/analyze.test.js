@@ -119,3 +119,38 @@ test('simulator: burst selang-seli PID + korelasi hujung ke hujung', async () =>
   assert.strictEqual(res.results[0].id, '320', JSON.stringify(res.results.slice(0, 2)));
   assert.strictEqual(res.results[0].label, 'bait 2');
 });
+
+test('asas: hanya bit baru berubah ditanda', () => {
+  const b = new A.Baseline();
+  b.start();
+  for (let i = 0; i < 20; i++) {
+    b.add({ id: '320', data: [0, 0x1F, 50 + (i % 3), 0, i & 0xff], t: i });   // bait 2 & 4 memang berubah
+    b.add({ id: '3B7', data: [0x00, 0, 0, 0], t: i });
+  }
+  b.finish();
+  assert.strictEqual(b.state, 'ready');
+  assert.strictEqual(b.add({ id: '320', data: [0, 0x1F, 51, 0, 18], t: 30 }), null);   // bunyi biasa
+  const c = b.add({ id: '3B7', data: [0x20, 0, 0, 0], t: 31 });                       // brek ditekan
+  assert.ok(c && !c.isNew && c.mask[0] === 0x20);
+  assert.ok(b.add({ id: '5A0', data: [1], t: 32 }).isNew);
+  assert.deepStrictEqual([...b.changes.keys()].sort(), ['3B7', '5A0']);
+});
+
+test('cari nilai odometer 16/24-bit dan tapis', () => {
+  const latest = new Map([
+    ['420', [0x00, 0x01, 0xE2, 0x40, 0, 0, 0, 0]],      // 123456 km = 0x01E240 BE bait 1-3
+    ['545', [0xD8, 0, 0, 0, 0, 0, 0, 0]],
+    ['320', [0, 0x1F, 0x56, 0, 0x40, 0, 0, 0x10]]
+  ]);
+  const r = A.searchValue(latest, 123456, 0.0005);
+  const hit = r.find(c => c.id === '420' && c.length === 24 && c.order === 'motorola' && c.scale === 1);
+  assert.ok(hit, JSON.stringify(r.slice(0, 3)));
+  assert.strictEqual(r[0].id, '420');
+  latest.set('420', [0x00, 0x01, 0xE2, 0x41, 0, 0, 0, 0]);
+  const r2 = A.searchValue(latest, 123457, 0.0005, r);
+  assert.ok(r2.some(c => c.id === '420' && c.length === 24));
+  assert.ok(r2.length <= r.length);
+  // throttle 33.7% = 0x56 * 100/255
+  const t = A.searchValue(latest, 33.7, 0.01);
+  assert.ok(t.some(c => c.id === '320' && c.start === 16 && c.length === 8 && Math.abs(c.scale - 100 / 255) < 1e-4));
+});

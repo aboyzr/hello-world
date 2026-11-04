@@ -15,10 +15,16 @@ Bluetooth dari Android turut ikut bahasa dipilih. Teks ada dalam `i18n.js`.
 | Tab | Fungsi |
 |---|---|
 | **Graf** | Sehingga 4 sensor serentak, 30 saat terakhir. Isyarat CAN menunjukkan ID, bait, nilai mentah, formula dan Hz. PID standard OBD juga boleh dipilih. |
-| **Sniff** | Semua bingkai di bas (`ATMA`): jadual ID, bait berubah diwarnakan, peranan bait (counter, checksum, analog, bit), tapis ID/mask, rakam dan eksport CSV. |
+| **Sniff** | Semua bingkai di bas (`ATMA`): jadual ID, bait berubah diwarnakan, peranan bait (counter, checksum, analog, bit), tapis ID/mask, rakam dan eksport CSV. **Ambil asas** 3 saat, kemudian **Hanya berubah** sorok semua ID yang tak berubah selepas tindakan anda. Tekan satu ID untuk lihat graf setiap bait, 8 bit setiap bait, dan tambah bait mentah terus ke Graf. |
 | **Kenal ID** | Label setiap ID dengan sumbernya: **Standard** (OBD/UDS 7DF/7E0–7EF, J1939), **DBC** (fail import), **Dipelajari**, **Sendiri**, **Tekaan** (dari corak data) atau **Belum dikenal**. Profil ikut kereta, import/eksport `.dbc`. |
-| **Belajar** | *Banding dengan PID*: baca sensor melalui PID standard sambil rakam bingkai CAN, cari bait yang bergerak seiring (korelasi) dan kira skala/ofset. *Tindakan*: tekan "Saya sedang buat" semasa tekan brek / buka pintu; app cari bit yang berubah. |
+| **Belajar** | *Banding dengan PID*: baca sensor melalui PID standard sambil rakam bingkai CAN, cari bait yang bergerak seiring (korelasi) dan kira skala/ofset. *Cari nilai*: taip nombor di meter (odometer, % minyak), app cari bait yang mengandungi nombor itu (8–32 bit, LE/BE, skala biasa); tapis semula bila nombor berubah. *Tindakan*: tekan "Saya sedang buat" semasa tekan brek / buka pintu; app cari bit yang berubah. |
 | **Sambung** | Senarai dongle dipair, imbas BLE, Demo. Uji cip, protokol, VIN, voltan dan sama ada mod sniff disokong. Terminal arahan AT. |
+
+## Simpan & sambung semula
+- Profil, label, pilihan graf dan bahasa disimpan dalam app.
+- Sesi Belajar (PID dan tindakan) disimpan setiap 2 saat. Jika app ditutup, tab Belajar menunjukkan **Sesi belum siap**: Sambung semula, Lihat hasil atau Buang.
+- Jika Bluetooth terputus semasa kerja, app cuba sambung semula 3 kali dan teruskan dari tempat berhenti.
+- Rakaman sniff terakhir disimpan, jadi CSV masih boleh dieksport selepas app dibuka semula.
 
 ## Had yang perlu tahu
 - ID CAN mentah ditetapkan pengeluar dan tiada senarai rasmi. Label **Tekaan** hanya petunjuk; sahkan dengan tab Belajar.

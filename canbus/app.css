@@ -149,3 +149,21 @@ dialog::backdrop { background: rgba(0,0,0,.6); }
 .lang { display: flex; border: 1px solid var(--line); border-radius: 99px; overflow: hidden; flex: none; }
 .lang button { background: none; border: 0; color: var(--muted); font: 600 12px system-ui, sans-serif; padding: 6px 10px; min-height: 32px; }
 .lang button[aria-pressed="true"] { background: var(--amber); color: var(--on-amber); }
+
+/* Asas & perubahan */
+.base-bar .btn[aria-pressed="true"] { background: var(--amber); color: var(--on-amber); border-color: transparent; font-weight: 600; }
+.b.hit { outline: 2px solid var(--ok); outline-offset: -1px; color: var(--ok); font-weight: 700; }
+.srow.changed { background: color-mix(in srgb, var(--ok) 10%, transparent); }
+.srow .badge { display: block; font: 600 9.5px system-ui, sans-serif; color: var(--ok); text-transform: uppercase; letter-spacing: .04em; }
+/* Paparan bait & bit dalam dialog ID */
+.bytes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin: 8px 0 4px; }
+.bcell { background: var(--card2); border: 1px solid var(--line); border-radius: 10px; padding: 6px; display: grid; gap: 3px; min-width: 0; }
+.bcell .top { display: flex; justify-content: space-between; align-items: baseline; font: 11px var(--mono); color: var(--muted); }
+.bcell .top b { font: 700 15px var(--mono); color: var(--text); }
+.bcell canvas { width: 100%; height: 26px; display: block; }
+.bits { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; }
+.bits i { height: 8px; border-radius: 2px; background: var(--line); }
+.bits i.on { background: var(--amber); }
+.bits i.flip { background: var(--ok); }
+.bcell button { border: 1px solid var(--line); background: none; border-radius: 7px; font-size: 11px; padding: 3px 0; color: var(--amber); min-height: 26px; }
+.resume { border-color: var(--amber); }

@@ -70,7 +70,8 @@ function applyLanguage() {
   document.querySelectorAll('.lang button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.lang === I18N.lang)));
   if (NATIVE && window.ObdBridge && window.ObdBridge.setLanguage) window.ObdBridge.setLanguage(I18N.lang);
   if (!$('actName').value || $('actName').dataset.auto === '1') { $('actName').value = t('act.default'); $('actName').dataset.auto = '1'; }
-  updatePill(); updateButtons(); renderProfiles(); fillLearnPids(); renderInfo(); refreshGraphIndex(); buildCharts();
+  updatePill(); updateButtons(); updateBase(); renderResume(); renderProfiles(); fillLearnPids(); renderInfo(); refreshGraphIndex(); buildCharts();
+  if (findCands) renderFind();
   renderLearn(learn.final); renderAct(act.final);
   render(true);
 }
@@ -175,15 +176,40 @@ $('btnWebBle').onclick = () => connect(new WebBleTransport());
 $('btnSerial').onclick = () => connect(new WebSerialTransport());
 $('btnDisconnect').onclick = () => disconnect();
 
+// Sambung semula automatik bila Bluetooth terputus, kemudian teruskan kerja yang sedang berjalan
+let lastConn = null, reconnecting = false;
+async function onLost(msg) {
+  const kind = engine && engine.kind;
+  interrupted = true;
+  await disconnect(true);
+  setStatus(msg ? t('conn.lostMsg', { msg }) : t('conn.lost'), true);
+  if (!lastConn || reconnecting) return;
+  reconnecting = true;
+  try {
+    for (let i = 1; i <= 3 && !elm; i++) {
+      setStatus(t('conn.retry', { n: i }), true);
+      await sleep(1500 * i);
+      await connect(lastConn.make(), lastConn.dev);
+    }
+  } finally { reconnecting = false; }
+  if (!elm) { setStatus(t('conn.retryFail'), true); return; }
+  toast(t('conn.back'));
+  const s = await kv.get('session');
+  if (kind === 'learn' && s && s.kind === 'learn') startLearn(s);
+  else if (kind === 'act' && s && s.kind === 'act') startAct(s);
+  else if (kind === 'sniff') $('btnSniff').click();
+  else if (kind === 'graf') startGraf();
+}
 async function connect(tr, dev) {
   if (busy) return;
+  lastConn = tr instanceof AndroidTransport ? { make: () => new AndroidTransport(dev), dev } : tr instanceof SimTransport ? { make: () => new SimTransport(), dev: null } : null;
   if (elm) await disconnect();
   busy = true;
   setStatus(t('conn.connecting', { name: tr.name === 'Demo (simulator)' ? t('conn.demo') : (tr.name || 'dongle') }));
   try {
     await tr.open();
     transport = tr;
-    tr.onClose(msg => { if (transport === tr) { disconnect(); setStatus(msg ? t('conn.lostMsg', { msg }) : t('conn.lost'), true); } });
+    tr.onClose(msg => { if (transport === tr) onLost(msg); });
     elm = new Elm327(tr, logTerm);
     setStatus(t('conn.init'));
     const info = await elm.init($('protoSel').value);
@@ -264,6 +290,7 @@ function onLine(line) {
     if (recording.length >= 200000) { toast(t('sniff.recLimit')); toggleRec(); }
   }
   if (act.running) act.samples.push({ on: act.on, f });
+  if (base.state !== 'idle') base.add(f);
   const keys = graphIndex.get(f.id);
   if (keys) for (const k of keys) { const s = sigByKey(k); const v = s && C.extractSignal(f.data, s); if (v != null) pushSeries(k, f.t, v, f.data); }
 }
@@ -282,6 +309,24 @@ function updateButtons() {
 
 // ---------- SNIFF ----------
 let recording = null, lastRec = null, recT0 = 0;
+const base = new A.Baseline(); let onlyChanged = false, baseTimer = null;
+$('btnBase').onclick = async () => {
+  if (base.state === 'collect') return;
+  if (base.state === 'ready') { base.reset(); onlyChanged = false; updateBase(); render(true); return; }
+  if (!(engine && engine.kind === 'sniff')) { $('btnSniff').click(); await sleep(300); if (!(engine && engine.kind === 'sniff')) return; }
+  base.start(); updateBase();
+  let left = 3;
+  baseTimer = setInterval(() => {
+    left--; updateBase(left);
+    if (left <= 0) { clearInterval(baseTimer); base.finish(); onlyChanged = true; updateBase(); render(true); toast(t('base.ready')); }
+  }, 1000);
+};
+$('btnOnlyChg').onclick = () => { if (base.state !== 'ready') { toast(t('base.needBase')); return; } onlyChanged = !onlyChanged; updateBase(); render(true); };
+function updateBase(left) {
+  $('btnBase').textContent = base.state === 'collect' ? t('base.collecting', { s: left == null ? 3 : left }) : base.state === 'ready' ? t('base.reset') : t('base.take');
+  $('btnOnlyChg').setAttribute('aria-pressed', String(onlyChanged));
+  $('baseInfo').textContent = base.state === 'ready' ? t('base.info', { n: base.ids.size, c: base.changes.size }) : base.state === 'collect' ? t('base.hold') : t('base.intro');
+}
 $('btnSniff').onclick = async () => {
   if (engine && engine.kind === 'sniff') return stopEngine();
   if (needCan()) return;
@@ -293,7 +338,7 @@ $('btnSniff').onclick = async () => {
 };
 $('btnRec').onclick = toggleRec;
 function toggleRec() {
-  if (recording) { lastRec = recording; recording = null; $('btnCsv').disabled = !lastRec.length; updateButtons(); toast(t('sniff.recorded', { n: lastRec.length })); return; }
+  if (recording) { lastRec = recording; recording = null; $('btnCsv').disabled = !lastRec.length; updateButtons(); kv.set('lastRec', lastRec); toast(t('sniff.recorded', { n: lastRec.length })); return; }
   recording = []; recT0 = now(); $('btnCsv').disabled = true; updateButtons();
   if (!engine) toast(t('sniff.recHint'));
 }
@@ -311,7 +356,9 @@ function saveText(name, mime, text) {
 const sortIds = () => [...hist.ids.values()].sort((a, b) => a.id.length - b.id.length || a.id.localeCompare(b.id));
 const prevData = new Map(), changedAt = new Map();
 function renderSniff() {
-  const tn = now(), rows = sortIds();
+  const tn = now();
+  let rows = sortIds();
+  if (onlyChanged && base.state === 'ready') rows = rows.filter(e => base.changes.has(e.id));
   for (const e of rows) {
     const last = e.frames[e.frames.length - 1].data, prev = prevData.get(e.id) || [], ch = changedAt.get(e.id) || [];
     last.forEach((b, i) => { if (prev[i] !== undefined && prev[i] !== b) ch[i] = tn; });
@@ -319,10 +366,12 @@ function renderSniff() {
   }
   $('sniffTable').innerHTML = rows.length ? `<div class="srow head"><span>ID</span><span>${esc(t('sniff.data'))}</span><span class="hz">Hz</span></div>` + rows.map(e => {
     const d = e.frames[e.frames.length - 1].data, ch = changedAt.get(e.id) || [], g = guessCache.get(e.id), roles = (g && g.roles) || [];
-    const lbl = labelFor(e.id);
-    return `<button class="srow" data-id="${e.id}"><span class="id">${e.id}<small>${lbl.source === 'unk' || lbl.source === 'guess' ? '' : esc(lbl.name)}</small></span><span>${d.map((b, i) => `<span class="b${tn - (ch[i] || 0) < 400 ? ' chg' : ''}${roles[i] ? ' r-' + roles[i] : ''}">${C.hex2(b)}</span>`).join(' ')}</span><span class="hz">${e.hz ? Math.round(e.hz) : '–'}</span></button>`;
+    const lbl = labelFor(e.id), bc = base.state === 'ready' ? base.changes.get(e.id) : null;
+    const badge = bc ? `<span class="badge">${esc(bc.isNew ? t('base.new') : t('base.changed'))}</span>` : '';
+    return `<button class="srow${bc ? ' changed' : ''}" data-id="${e.id}"><span class="id">${e.id}${badge}<small>${lbl.source === 'unk' || lbl.source === 'guess' ? '' : esc(lbl.name)}</small></span><span>${d.map((b, i) => `<span class="b${tn - (ch[i] || 0) < 400 ? ' chg' : ''}${roles[i] ? ' r-' + roles[i] : ''}${bc && bc.mask[i] ? ' hit' : ''}">${C.hex2(b)}</span>`).join(' ')}</span><span class="hz">${e.hz ? Math.round(e.hz) : '–'}</span></button>`;
   }).join('') : '';
   const secs = (tn - frameT0) / 1000;
+  if (base.state === 'ready') updateBase();
   if (engine && engine.kind === 'sniff') $('sniffStats').textContent = t('sniff.stats', { f: frameCount, ids: hist.ids.size, rate: (frameCount / Math.max(secs, 0.1)).toFixed(0) }) + (recording ? ' · ' + t('sniff.recording', { n: recording.length }) : '');
 }
 $('sniffTable').addEventListener('click', e => { const r = e.target.closest('.srow[data-id]'); if (r) openIdDialog(r.dataset.id); });
@@ -360,7 +409,40 @@ function openIdDialog(id) {
   $('idName').placeholder = l.name;
   $('btnDelLabel').hidden = !profile().labels[id];
   renderDlgSigs(l);
+  $('idBytes').innerHTML = '';
   $('idDlg').showModal();
+  renderIdBytes();
+}
+function renderIdBytes() {
+  const e = hist.ids.get(dlgId), box = $('idBytes');
+  if (!e) { box.innerHTML = ''; return; }
+  const fr = e.frames.filter(f => now() - f.t < 10000), last = e.frames[e.frames.length - 1].data, prev = e.frames.length > 1 ? e.frames[e.frames.length - 2].data : last;
+  if (box.children.length !== last.length) {
+    box.innerHTML = last.map((_, i) => `<div class="bcell"><div class="top"><span>B${i}</span><b></b></div><canvas></canvas><div class="bits">${'<i></i>'.repeat(8)}</div><button type="button" data-b="${i}">${esc(t('bytes.graph'))}</button></div>`).join('');
+    box.querySelectorAll('button[data-b]').forEach(b => b.onclick = () => {
+      const k = 'raw:' + dlgId + ':' + b.dataset.b;
+      if (graphSel.includes(k)) { toast(t('bytes.already')); return; }
+      if (graphSel.length >= 4) { toast(t('bytes.full')); return; }
+      graphSel.push(k); store.set('graph', graphSel); refreshGraphIndex(); buildCharts(); toast(t('bytes.added', { id: dlgId, b: b.dataset.b }));
+    });
+  }
+  const ever = last.map((_, i) => fr.reduce((m, f, k) => k ? m | ((f.data[i] ^ fr[k - 1].data[i]) & 0xff) : m, 0));
+  [...box.children].forEach((cell, i) => {
+    cell.querySelector('b').textContent = C.hex2(last[i]);
+    cell.querySelectorAll('.bits i').forEach((el, k) => {
+      const bit = 7 - k; // MSB di kiri
+      el.className = ((last[i] >> bit) & 1 ? 'on' : '') + (((last[i] ^ prev[i]) >> bit) & 1 || (ever[i] >> bit) & 1 ? ' flip' : '');
+      el.title = 'bit ' + bit;
+    });
+    const cv = cell.querySelector('canvas'), w = cv.clientWidth, h = cv.clientHeight, r = window.devicePixelRatio || 1;
+    if (!w) return;
+    if (cv.width !== Math.round(w * r)) { cv.width = Math.round(w * r); cv.height = Math.round(h * r); }
+    const g = cv.getContext('2d'); g.setTransform(r, 0, 0, r, 0, 0); g.clearRect(0, 0, w, h);
+    if (fr.length < 2) return;
+    const t0 = now() - 10000;
+    g.beginPath(); fr.forEach((f, k) => { const x = (f.t - t0) / 10000 * w, y = h - 1 - f.data[i] / 255 * (h - 2); k ? g.lineTo(x, y) : g.moveTo(x, y); });
+    g.strokeStyle = cssVar('--amber'); g.lineWidth = 1.5; g.stroke();
+  });
 }
 function renderDlgSigs(l) {
   const e = hist.ids.get(dlgId); const d = e ? e.frames[e.frames.length - 1].data : [];
@@ -437,6 +519,7 @@ function sigByKey(k) {
   return s;
 }
 function findSig(k) {
+  if (k.startsWith('raw:')) { const [, id, b] = k.split(':'); return { id, name: 'B' + b, label: t('bytes.label', { id, b }), start: +b * 8, length: 8, order: 'intel', signed: false, scale: 1, offset: 0, unit: '' }; }
   if (k.startsWith('pid:')) { const pid = +k.slice(4); const d = C.PIDS[pid]; return d ? { pid, unit: d.unit, isPid: true } : null; }
   const [, id, ...rest] = k.split(':'); const name = rest.join(':');
   return allCanSignals().find(s => s.id === id && s.name === name) || null;
@@ -458,7 +541,8 @@ $('btnPickSig').onclick = () => {
     .map(s => { const k = 'can:' + s.id + ':' + s.name; return `<label><input type="checkbox" value="${esc(k)}" ${graphSel.includes(k) ? 'checked' : ''}>${esc(sigName(s))}<code>ID ${s.id}</code></label>`; }).join('');
   const pids = (supported.length ? supported : Object.keys(C.PIDS).map(Number)).filter(p => C.PIDS[p] && p !== 0x01 && p !== 0x1C && p !== 0x51).sort((a, b) => a - b);
   const pidHtml = pids.map(p => `<label><input type="checkbox" value="pid:${p}" ${graphSel.includes('pid:' + p) ? 'checked' : ''}>${esc(C.pidName(p))}<code>PID 01 ${C.hex2(p)}</code></label>`).join('');
-  $('sigPick').innerHTML = `<h4>${esc(t('pick.can'))}</h4>${canHtml || `<p class="sub">${esc(t('pick.noCan'))}</p>`}<h4>${esc(t('pick.pid'))}</h4>${pidHtml}`;
+  const rawHtml = graphSel.filter(k => k.startsWith('raw:')).map(k => `<label><input type="checkbox" value="${esc(k)}" checked>${esc(sigByKey(k).label)}<code>${esc(t('bytes.rawTag'))}</code></label>`).join('');
+  $('sigPick').innerHTML = `<h4>${esc(t('pick.can'))}</h4>${canHtml || `<p class="sub">${esc(t('pick.noCan'))}</p>`}${rawHtml ? `<h4>${esc(t('bytes.rawHead'))}</h4>${rawHtml}` : ''}<h4>${esc(t('pick.pid'))}</h4>${pidHtml}`;
   $('sigPick').onchange = () => {
     const boxes = [...$('sigPick').querySelectorAll('input')];
     const on = boxes.filter(b => b.checked);
@@ -566,6 +650,29 @@ function drawChart(cv, data) {
   const lp = vis[vis.length - 1]; g.beginPath(); g.arc(X(lp.t), Y(lp.v), 3.5, 0, 7); g.fillStyle = tr; g.fill();
 }
 
+// ---------- Storan sesi (IndexedDB, jatuh balik ke localStorage) ----------
+const kv = (() => {
+  let dbp = null;
+  const open = () => dbp || (dbp = new Promise((res, rej) => {
+    try {
+      const r = indexedDB.open('aboy-canbus', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('kv');
+      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+    } catch (e) { rej(e); }
+  }));
+  const tx = (mode, fn) => open().then(db => new Promise((res, rej) => {
+    const q = fn(db.transaction('kv', mode).objectStore('kv')); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error);
+  }));
+  return {
+    get: k => tx('readonly', st => st.get(k)).catch(() => store.get('kv.' + k, null)),
+    set: (k, v) => tx('readwrite', st => st.put(v, k)).catch(() => store.set('kv.' + k, v)),
+    del: k => tx('readwrite', st => st.delete(k)).catch(() => store.set('kv.' + k, null))
+  };
+})();
+const toHex = d => d.map(C.hex2).join('');
+const fromHex = h => { const o = []; for (let i = 0; i < h.length; i += 2) o.push(parseInt(h.slice(i, i + 2), 16)); return o; };
+let pendingSession = null, interrupted = false, lastSave = 0;
+
 // ---------- BELAJAR: banding dengan PID ----------
 const LEARN_PIDS = [0x11, 0x0C, 0x0D, 0x05, 0x04, 0x0B, 0x10, 0x0F, 0x2F, 0x42, 0x5C, 0x46];
 function fillLearnPids() {
@@ -578,38 +685,81 @@ function fillLearnPids() {
 function updateLearnHint() { const p = +$('learnPid').value; $('learnHint').textContent = p ? t('hint.' + C.hex2(p), null, t('hint.default')) : ''; }
 $('learnPid').onchange = updateLearnHint;
 
-let learn = { ref: [], pid: null, results: [] };
+// Setiap bacaan PID disimpan bersama bingkai terkini setiap ID ("snap") — jimat memori dan boleh disambung semula
+let learn = { pid: null, snaps: [], base: 0, results: [] };
+const learnTime = () => learn.base + (learn.t0 != null ? (learn.tStop || now()) - learn.t0 : 0);
+function learnCorrelate() {
+  const h = new A.History(1e7);
+  for (const sn of learn.snaps) for (const id in sn.d) h.add({ id, data: sn.d[id], t: sn.t });
+  return A.correlate(learn.snaps.map(sn => ({ t: sn.t, v: sn.v })), h);
+}
+function snapLatest(id) {
+  const e = hist.ids.get(id);
+  if (e) return e.frames[e.frames.length - 1].data;
+  for (let i = learn.snaps.length - 1; i >= 0; i--) if (learn.snaps[i].d[id]) return learn.snaps[i].d[id];
+  return null;
+}
+function saveLearnSession(done) {
+  lastSave = now();
+  return kv.set('session', {
+    kind: 'learn', pid: learn.pid, elapsed: learn.elapsed != null ? learn.elapsed : learnTime(), profile: profiles.current, savedAt: Date.now(), done: !!done,
+    snaps: learn.snaps.map(sn => ({ t: sn.t, v: sn.v, f: Object.fromEntries(Object.entries(sn.d).map(([id, d]) => [id, toHex(d)])) }))
+  });
+}
 $('btnLearn').onclick = async () => {
   if (engine && engine.kind === 'learn') return stopEngine();
+  startLearn(null);
+};
+async function startLearn(resume) {
   if (needCan()) return;
   if (sniffOk === false) { toast(t('learn.noSniff')); return; }
   await stopEngine();
+  if (resume) $('learnPid').value = String(resume.pid);
   const pid = +$('learnPid').value;
-  learn = { ref: [], pid, results: [], t0: now() };
+  learn = resume
+    ? { pid, snaps: resume.snaps.map(sn => ({ t: sn.t, v: sn.v, d: Object.fromEntries(Object.entries(sn.f).map(([id, h]) => [id, fromHex(h)])) })), base: resume.elapsed, results: [] }
+    : { pid, snaps: [], base: 0, results: [] };
+  pendingSession = null; renderResume();
   hist.clear(); guessCache.clear();
   $('learnRef').hidden = false; $('learnResults').innerHTML = '';
+  interrupted = false;
   startEngine('learn', async eng => {
     eng.burst = true;
+    learn.t0 = now();
     let lastCalc = now();
     while (!eng.stop && elm) {
+      const b0 = now();
       await elm.burst(250, onLine);
       const r = await elm.readPid(pid).catch(() => null);
-      if (r && typeof r.value === 'number') learn.ref.push({ t: now(), v: r.value });
-      if (now() - lastCalc > 3000) { lastCalc = now(); learn.results = A.correlate(learn.ref, hist).results; renderLearn(); }
+      if (r && typeof r.value === 'number') {
+        const d = {};
+        for (const e of hist.ids.values()) { const f = e.frames[e.frames.length - 1]; if (f.t >= b0) d[e.id] = f.data; }
+        learn.snaps.push({ t: learnTime(), v: r.value, d });
+      }
+      if (now() - lastCalc > 3000) { lastCalc = now(); learn.results = learnCorrelate().results; renderLearn(); }
+      if (now() - lastSave > 2000) saveLearnSession(false);
     }
+    learn.tStop = now();
   });
-  engine.after = () => { const res = A.correlate(learn.ref, hist); learn.results = res.results; learn.error = res.error; learn.final = true; learn.tEnd = now(); renderLearn(true); };
-};
+  engine.after = () => {
+    learn.elapsed = learnTime(); learn.tEnd = true;
+    const res = learnCorrelate(); learn.results = res.results; learn.error = res.error; learn.final = true;
+    saveLearnSession(!interrupted);
+    renderLearn(true);
+  };
+}
 function renderLearn(final) {
   if (!learn.pid) return;
-  const name = C.pidName(learn.pid), unit = C.PIDS[learn.pid].unit, last = learn.ref[learn.ref.length - 1];
-  const secs = ((learn.tEnd || now()) - learn.t0) / 1000;
+  const name = C.pidName(learn.pid), unit = C.PIDS[learn.pid].unit, last = learn.snaps[learn.snaps.length - 1];
+  const secs = (learn.elapsed != null ? learn.elapsed : learnTime()) / 1000;
+  const ids = last ? Object.keys(last.d).length : 0;
+  $('learnRef').hidden = false;
   $('learnRef').innerHTML = `${last ? fmt(last.v) : '–'}<small> ${esc(unit)} · ${esc(t('learn.fromPid', { name }))}</small>`;
-  $('learnInfo').textContent = t('learn.info', { s: secs.toFixed(0), n: learn.ref.length, ids: hist.ids.size });
+  $('learnInfo').textContent = t('learn.info', { s: secs.toFixed(0), n: learn.snaps.length, ids });
   if (final && learn.error) { $('learnResults').innerHTML = `<p class="hint">${esc(learn.error)}</p>`; return; }
-  if (!learn.results.length) { $('learnResults').innerHTML = learn.ref.length > 6 ? `<p class="sub">${esc(t('learn.none'))}</p>` : ''; return; }
+  if (!learn.results.length) { $('learnResults').innerHTML = learn.snaps.length > 6 ? `<p class="sub">${esc(t('learn.none'))}</p>` : ''; return; }
   $('learnResults').innerHTML = `<h3 class="sec">${esc(final ? t('learn.best') : t('learn.sofar'))}</h3>` + learn.results.map((c, i) => {
-    const e = hist.ids.get(c.id), raw = e ? e.frames[e.frames.length - 1].data : null;
+    const raw = snapLatest(c.id);
     const v = raw ? C.extractSignal(raw, c) : null;
     const pct = Math.round(c.score * 100);
     return `<div class="cand"><span class="m">ID ${c.id} · ${esc(candLabel(c))}</span><span class="m">${pct}%</span><div class="meter"><span style="width:${pct}%"></span></div>`
@@ -618,7 +768,7 @@ function renderLearn(final) {
   }).join('') + (final ? `<p class="sub">${esc(t('learn.explain'))}</p>` : '');
   $('learnResults').querySelectorAll('button[data-i]').forEach(b => b.onclick = () => saveLearned(learn.results[+b.dataset.i]));
 }
-const candLabel = c => c.length === 8 ? t('graph.byte') + ' ' + c.bytes[0] : t('graph.byte') + ' ' + c.bytes[0] + '–' + c.bytes[1] + ' ' + (c.order === 'intel' ? 'LE' : 'BE');
+const candLabel = c => c.length === 8 ? t('graph.byte') + ' ' + c.bytes[0] : t('graph.byte') + ' ' + c.bytes[0] + '–' + c.bytes[c.bytes.length - 1] + ' ' + (c.order === 'intel' ? 'LE' : 'BE');
 function saveLearned(c) {
   const pid = learn.pid, unit = C.PIDS[pid].unit;
   const labels = profile().labels;
@@ -635,24 +785,94 @@ function saveLearned(c) {
   toast(t('learn.saved', { id: c.id, b: candLabel(c), name: C.pidName(pid) }));
 }
 
+// ---------- BELAJAR: cari nilai dari meter ----------
+let findCands = null;
+async function latestFrames() {
+  // Jika tiada tangkapan berjalan, tangkap 1 saat dulu
+  if (!(engine && (engine.kind === 'sniff' || engine.kind === 'act' || engine.kind === 'graf'))) {
+    if (needCan()) return null;
+    if (engine) { toast(t('msg.stopFirst')); return null; }
+    engine = { kind: 'term' };
+    try { await elm.burst(1200, onLine); } finally { engine = null; }
+  }
+  const m = new Map();
+  for (const e of hist.ids.values()) if (now() - e.last < 5000) m.set(e.id, e.frames[e.frames.length - 1].data);
+  return m;
+}
+async function doFind(again) {
+  const val = parseFloat($('findVal').value);
+  if (!isFinite(val)) { toast(t('find.needValue')); return; }
+  $('btnFind').disabled = true;
+  try {
+    const latest = await latestFrames(); if (!latest) return;
+    if (!latest.size) { toast(t('find.noFrames')); return; }
+    const roles = new Map(); for (const [id] of latest) { const g = guessCache.get(id) || (hist.ids.get(id) && A.guess(hist.ids.get(id))); if (g && g.roles) roles.set(id, g.roles); }
+    findCands = A.searchValue(latest, val, +$('findTol').value, again ? findCands : null, roles);
+    findRound = again ? findRound + 1 : 1;
+    renderFind(val);
+  } finally { $('btnFind').disabled = false; }
+}
+let findRound = 0;
+$('btnFind').onclick = () => doFind(false);
+$('btnFindAgain').onclick = () => doFind(true);
+$('btnFindReset').onclick = () => { findCands = null; findRound = 0; $('findResults').innerHTML = ''; $('findInfo').textContent = ''; $('btnFindAgain').disabled = $('btnFindReset').disabled = true; };
+function renderFind(val) {
+  const n = findCands ? findCands.length : 0;
+  $('btnFindAgain').disabled = $('btnFindReset').disabled = !findCands;
+  $('findInfo').textContent = !findCands ? '' : n ? t('find.count', { n, r: findRound }) + (n > 8 ? ' ' + t('find.narrow') : '') : t('find.none');
+  $('findResults').innerHTML = (findCands || []).slice(0, 12).map((c, i) => `<div class="cand"><span class="m">ID ${c.id} · ${esc(candLabel(c))}</span><span class="m">${fmt(c.value)}</span>`
+    + `<span class="d">${esc(t('graph.value'))} = ${esc(t('graph.raw'))} × ${+c.scale.toFixed(6)} ${c.offset < 0 ? '−' : '+'} ${Math.abs(c.offset)}</span>`
+    + `<button class="btn small" data-i="${i}">${esc(t('find.save'))}</button></div>`).join('');
+  $('findResults').querySelectorAll('button[data-i]').forEach(b => b.onclick = async () => {
+    const c = findCands[+b.dataset.i];
+    const name = await ask(t('find.saveTitle'), t('find.saveText', { id: c.id, b: candLabel(c) }), { input: true, placeholder: t('find.namePh'), ok: t('common.save') });
+    if (!name) return;
+    const labels = profile().labels;
+    const l = labels[c.id] || (labels[c.id] = { name: '', source: 'user', signals: [] });
+    l.signals = (l.signals || []).filter(s => s.name !== name);
+    l.signals.push({ name, id: c.id, start: c.start, length: c.length, order: c.order, signed: false, scale: c.scale, offset: c.offset, unit: '', source: 'user', min: 0, max: 0 });
+    saveProfiles(); refreshGraphIndex(); toast(t('msg.savedProfile', { p: profiles.current }));
+  });
+}
+
 // ---------- BELAJAR: tindakan ----------
 const act = { running: false, on: false, samples: [], marks: 0, results: [] };
+function saveActSession(done) {
+  lastSave = now();
+  const sm = act.samples.length > 30000 ? act.samples.slice(-30000) : act.samples;
+  return kv.set('session', { kind: 'act', name: $('actName').value.trim(), marks: act.marks, profile: profiles.current, savedAt: Date.now(), done: !!done,
+    samples: sm.map(x => [x.on ? 1 : 0, x.f.id, toHex(x.f.data)]) });
+}
 $('btnAct').onclick = async () => {
   if (engine && engine.kind === 'act') return stopEngine();
+  startAct(null);
+};
+async function startAct(resume) {
   if (needCan()) return;
   if (sniffOk === false) { toast(t('learn.noSniff')); return; }
   await stopEngine();
   Object.assign(act, { running: true, on: false, samples: [], marks: 0, results: [], final: false });
+  if (resume) {
+    act.samples = resume.samples.map(([on, id, h]) => ({ on: !!on, f: { id, data: fromHex(h) } }));
+    act.marks = resume.marks || 0;
+    if (resume.name) { $('actName').value = resume.name; $('actName').dataset.auto = '0'; }
+  }
+  pendingSession = null; renderResume();
   $('actResults').innerHTML = '';
+  interrupted = false;
   if (transport instanceof SimTransport) transport.brake = false;
-  startEngine('act', eng => sniffUntilStop(eng));
+  startEngine('act', async eng => {
+    const tick = setInterval(() => { if (now() - lastSave > 2000) saveActSession(false); }, 1000);
+    try { await sniffUntilStop(eng); } finally { clearInterval(tick); }
+  });
   engine.after = () => {
     act.running = false; act.final = true;
     if (transport instanceof SimTransport) transport.brake = null;
     act.results = A.actionBits(act.samples);
+    saveActSession(!interrupted);
     renderAct(true);
   };
-};
+}
 $('btnActOn').onclick = () => {
   act.on = !act.on; if (act.on) act.marks++;
   $('btnActOn').classList.toggle('on', act.on);
@@ -683,6 +903,46 @@ function renderAct(final) {
   });
 }
 
+// ---------- Sambung semula sesi ----------
+function renderResume() {
+  const s = pendingSession;
+  $('resumeCard').hidden = !s;
+  if (!s) return;
+  const when = new Date(s.savedAt).toLocaleString(I18N.lang === 'ms' ? 'ms-MY' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+  $('resumeText').textContent = s.kind === 'learn'
+    ? t('resume.learn', { name: C.pidName(s.pid), s: Math.round(s.elapsed / 1000), n: s.snaps.length, when })
+    : t('resume.act', { name: s.name || t('act.default'), n: s.samples.length, m: s.marks, when });
+}
+$('btnResume').onclick = () => {
+  const s = pendingSession; if (!s) return;
+  if (!elm) { toast(t('resume.needConn')); showTab('conn'); return; }
+  if (s.profile && profiles.list[s.profile]) { profiles.current = s.profile; renderProfiles(); }
+  if (s.kind === 'learn') startLearn(s); else startAct(s);
+};
+$('btnResumeView').onclick = () => {
+  const s = pendingSession; if (!s) return;
+  if (s.kind === 'learn') {
+    $('learnPid').value = String(s.pid);
+    learn = { pid: s.pid, snaps: s.snaps.map(sn => ({ t: sn.t, v: sn.v, d: Object.fromEntries(Object.entries(sn.f).map(([id, h]) => [id, fromHex(h)])) })), base: s.elapsed, elapsed: s.elapsed, results: [] };
+    const res = learnCorrelate(); learn.results = res.results; learn.error = res.error; learn.final = true;
+    renderLearn(true);
+  } else {
+    act.samples = s.samples.map(([on, id, h]) => ({ on: !!on, f: { id, data: fromHex(h) } })); act.marks = s.marks; act.final = true;
+    if (s.name) $('actName').value = s.name;
+    act.results = A.actionBits(act.samples); renderAct(true);
+  }
+};
+$('btnResumeDrop').onclick = async () => {
+  if (!(await ask(t('resume.dropTitle'), t('resume.dropText'), { ok: t('resume.drop') }))) return;
+  pendingSession = null; kv.del('session'); renderResume();
+};
+kv.get('session').then(s => {
+  if (s && !s.done && ((s.kind === 'learn' && s.snaps && s.snaps.length) || (s.kind === 'act' && s.samples && s.samples.length))) {
+    pendingSession = s; renderResume(); setStatus(t('resume.banner'));
+  }
+});
+kv.get('lastRec').then(r => { if (r && r.length) { lastRec = r; $('btnCsv').disabled = false; } });
+
 // ---------- Terminal ----------
 $('termForm').addEventListener('submit', async e => {
   e.preventDefault();
@@ -712,6 +972,7 @@ function render(force) {
   if (tab === 'graf') renderCharts();
   if (tab === 'ids' && (force || tn - lastIds > 1000)) { lastIds = tn; renderIds(); }
   if (tab === 'learn') { if (engine && engine.kind === 'learn') renderLearn(); if (act.running) renderAct(); }
+  if ($('idDlg').open && dlgId) renderIdBytes();
 }
 setInterval(() => { if (!document.hidden) render(); }, 250);
 
