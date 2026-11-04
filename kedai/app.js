@@ -1,4 +1,8 @@
 const $ = id => document.getElementById(id);
+// Bila dibuka dalam APK Android, fungsi telefon (kongsi, cetak, simpan fail) melalui AndroidBridge
+const NATIVE = window.AndroidBridge || null;
+const blobToB64 = b => new Promise(r => { const f = new FileReader(); f.onload = () => r(String(f.result).split(',')[1]); f.readAsDataURL(b); });
+function openExternal(url) { if (NATIVE) location.href = url; else open(url, '_blank'); }
 const money = Receipt.money;
 const pad = n => String(n).padStart(2, '0');
 const isoDate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -346,12 +350,16 @@ function waNumber(phone) {
 }
 function openWhatsAppText() {
   const num = waNumber(curSale.phone);
-  open(`https://wa.me/${num}?text=${encodeURIComponent(Receipt.text(curSale, shop))}`, '_blank');
+  openExternal(`https://wa.me/${num}?text=${encodeURIComponent(Receipt.text(curSale, shop))}`);
 }
 
 $('rShare').onclick = async () => {
   const blob = await new Promise(r => curCanvas.toBlob(r, 'image/png'));
   const file = new File([blob], `Resit-${curSale.no}.png`, { type: 'image/png' });
+  if (NATIVE) {
+    NATIVE.shareFile(file.name, 'image/png', await blobToB64(blob), `${shop.name} — resit ${curSale.no} (${money(curSale.total)})`);
+    return;
+  }
   if (navigator.canShare?.({ files: [file] })) {
     try {
       await navigator.share({ files: [file], title: `Resit ${curSale.no}`, text: `${shop.name} — resit ${curSale.no} (${money(curSale.total)})` });
@@ -367,12 +375,13 @@ $('rPrint').onclick = () => {
   const area = $('printArea');
   area.innerHTML = '';
   const img = new Image();
-  img.onload = () => { setTimeout(() => print(), 50); };
+  img.onload = () => { setTimeout(() => NATIVE ? NATIVE.print('Resit ' + curSale.no) : print(), 50); };
   img.src = $('rcptImg').src;
   area.append(img);
 };
 
-function download(name, blob) {
+async function download(name, blob) {
+  if (NATIVE) { NATIVE.saveFile(name, blob.type || 'application/octet-stream', await blobToB64(blob)); return; }
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = name;
@@ -474,7 +483,7 @@ function openBuyView(b) {
    ['Keterangan', b.desc || '—'], ['Cara bayar', b.pay]].forEach(([k, v]) => dl.append(el('dt', '', k), el('dd', '', v)));
   $('buyView').showModal();
 }
-$('bvImg').onclick = () => bvURL && open(bvURL, '_blank');
+$('bvImg').onclick = () => { if (bvURL && !NATIVE) open(bvURL, '_blank'); };
 $('bvEdit').onclick = () => { $('buyView').close(); openBuyForm(curBuy); };
 $('bvDel').onclick = async () => {
   if (!confirm(`Padam pembelian ${money(curBuy.total)}? Tidak boleh undo.`)) return;
@@ -523,7 +532,9 @@ $('backupBtn').onclick = async () => {
   const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
   const name = `backup-akaun-${isoDate(new Date())}.json`;
   const file = new File([blob], name, { type: 'application/json' });
-  if (navigator.canShare?.({ files: [file] }) && confirm('Kongsi fail backup (contoh: ke WhatsApp sendiri / Google Drive)?\nTekan Cancel untuk muat turun sahaja.')) {
+  const canShare = NATIVE || navigator.canShare?.({ files: [file] });
+  if (canShare && confirm('Kongsi fail backup (contoh: ke WhatsApp sendiri / Google Drive)?\nTekan Cancel untuk simpan dalam telefon sahaja.')) {
+    if (NATIVE) { NATIVE.shareFile(name, 'application/json', await blobToB64(blob), name); return; }
     try { await navigator.share({ files: [file], title: name }); return; } catch (err) { if (err.name === 'AbortError') return; }
   }
   download(name, blob);
@@ -557,7 +568,16 @@ $('csvBtn').onclick = () => {
 };
 
 /* ================= PWA ================= */
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+if ('serviceWorker' in navigator && !NATIVE) navigator.serviceWorker.register('sw.js').catch(() => {});
+
+// Butang Back Android: tutup borang / balik ke Utama dulu
+window.nativeBack = () => {
+  const d = document.querySelector('dialog[open]');
+  if (d) { d.close(); return true; }
+  if (tab !== 'home') { showTab('home'); return true; }
+  return false;
+};
 setInterval(() => { $('todayLabel').textContent = new Date().toLocaleDateString('ms-MY', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); }, 60000);
 
+if (NATIVE) $('apkCard').hidden = true;
 init();
