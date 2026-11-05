@@ -59,3 +59,5 @@ ipcMain.on('bluetooth-device-selected', (e, deviceId) => { if (pendingBt) { pend
 app.whenReady().then(createWindow);
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 app.on('window-all-closed', () => app.quit());
+
+// Aboy Canbus Windows build
