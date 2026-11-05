@@ -1,0 +1,55 @@
+name: Bina Windows EXE Aboy Canbus
+
+on:
+  push:
+    branches: [master, ccr-e10f1478-9pxy5o]
+    paths: ['canbus/**', 'electron/**', '.github/workflows/canbus-win.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Uji penyahkod CAN
+        run: node --test canbus/test/*.test.js
+
+      - name: Masukkan aplikasi web ke dalam Electron
+        shell: bash
+        run: |
+          rm -rf electron/canbus
+          mkdir -p electron/canbus
+          cp canbus/*.html canbus/*.js canbus/*.css canbus/*.svg electron/canbus/
+          cp -r canbus/dbc electron/canbus/dbc
+
+      - name: Bina EXE
+        working-directory: electron
+        run: |
+          npm install
+          npx electron-builder --win portable nsis
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AboyCanbus-windows
+          path: electron/dist/*.exe
+
+      # Tag tetap "canbus-win" supaya link muat turun tidak berubah
+      - name: Terbitkan di Releases
+        if: github.ref == 'refs/heads/master'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view canbus-win >/dev/null 2>&1 || \
+            gh release create canbus-win --title "Aboy Canbus (Windows)" --latest=false \
+              --notes "AboyCanbus.exe = portable (terus jalan). AboyCanbus-Setup.exe = pemasang."
+          gh release upload canbus-win electron/dist/AboyCanbus.exe electron/dist/AboyCanbus-Setup.exe --clobber
+          gh release edit canbus-win --title "Aboy Canbus Windows v1.0.${{ github.run_number }}"

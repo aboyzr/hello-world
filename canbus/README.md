@@ -43,6 +43,9 @@ Bluetooth dari Android turut ikut bahasa dipilih. Teks ada dalam `i18n.js`.
 - `app.js`, `index.html`, `app.css`: antara muka
 - `../android-canbus/`: projek Android (WebView + `ObdBluetooth.java` untuk Classic SPP dan BLE)
 
+## Versi Windows (.exe)
+App sama boleh dibina sebagai .exe Windows guna Electron — lihat `../electron/`. Dongle Bluetooth biasa muncul sebagai port COM; BLE melalui Web Bluetooth.
+
 ## Ujian
 ```
 node --test canbus/test/*.test.js
