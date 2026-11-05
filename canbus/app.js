@@ -139,8 +139,31 @@ function detailText(p) {
 const SRC = s => t('src.' + s);
 
 // ---------- Sambungan ----------
+const ELECTRON = window.ElectronBridge && window.ElectronBridge.isElectron ? window.ElectronBridge : null;
 if (!NATIVE && (WebBleTransport.available() || WebSerialTransport.available())) $('webBtns').hidden = false;
 if (!NATIVE) { $('btnList').hidden = true; $('btnScanBle').hidden = true; }
+
+// Electron (Windows): proses utama hantar senarai port COM / peranti BLE; papar untuk dipilih
+if (ELECTRON) {
+  document.body.classList.add('is-electron');
+  const picker = (list, kind, choose) => {
+    const ul = $('devList'); showTab('conn');
+    if (!list.length) { ul.innerHTML = `<li class="sub">${esc(kind === 'ble' ? t('win.scanningBle') : t('win.noPorts'))}</li>`; return; }
+    ul.innerHTML = '';
+    for (const d of list) {
+      const li = document.createElement('li');
+      li.innerHTML = `<button class="dev"><span><b>${esc(d.name)}</b></span><span class="tag">${kind === 'ble' ? 'BLE' : 'COM'}</span></button>`;
+      li.querySelector('button').onclick = () => { ul.innerHTML = `<li class="sub">${esc(t('win.opening', { name: d.name }))}</li>`; choose(d.id); };
+      ul.appendChild(li);
+    }
+    const cancel = document.createElement('li');
+    cancel.innerHTML = `<button class="dev"><span>${esc(t('common.cancel'))}</span></button>`;
+    cancel.querySelector('button').onclick = () => { ul.innerHTML = ''; choose(''); };
+    ul.appendChild(cancel);
+  };
+  ELECTRON.onSerialPortList(list => picker(list.map(p => ({ id: p.portId, name: p.name })), 'serial', id => ELECTRON.chooseSerialPort(id)));
+  ELECTRON.onBluetoothDeviceList(list => picker(list.map(d => ({ id: d.deviceId, name: d.name })), 'ble', id => ELECTRON.chooseBluetoothDevice(id)));
+}
 $('protoSel').value = store.get('proto', '0');
 $('protoSel').addEventListener('change', e => store.set('proto', e.target.value));
 
