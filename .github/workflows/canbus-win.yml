@@ -23,6 +23,7 @@ jobs:
           node-version: '20'
 
       - name: Uji penyahkod CAN
+        shell: bash
         run: node --test canbus/test/*.test.js
 
       - name: Masukkan aplikasi web ke dalam Electron
