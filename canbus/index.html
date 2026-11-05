@@ -203,6 +203,13 @@
           <button class="btn" id="btnWebBle" data-i18n="conn.webBle"></button>
           <button class="btn" id="btnSerial" data-i18n="conn.serial"></button>
         </div>
+        <div class="bar" id="slcanBar" hidden>
+          <button class="btn" id="btnSlcan" data-i18n="conn.slcan"></button>
+          <label class="field inline" for="slcanBit"><span data-i18n="conn.bitrate"></span>
+            <select id="slcanBit"><option value="500" selected>500k</option><option value="250">250k</option><option value="125">125k</option><option value="1000">1M</option></select>
+          </label>
+          <label class="chk" style="flex:1;min-width:150px"><input type="checkbox" id="slcanListen"><span data-i18n="conn.listen"></span></label>
+        </div>
         <ul class="list" id="devList"></ul>
         <label class="field" for="protoSel"><span data-i18n="conn.protocol"></span>
           <select id="protoSel">
@@ -306,6 +313,7 @@
   <script src="analyze.js"></script>
   <script src="dbc.js"></script>
   <script src="elm327.js"></script>
+  <script src="slcan.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

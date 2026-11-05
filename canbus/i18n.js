@@ -186,6 +186,7 @@
     'mod.intro': 'Reads which diagnostic modules answer on the bus (OBD + UDS TesterPresent to 7E0-7E7). This lists engine, TCU, ABS and others that use standard diagnostic addresses; broadcast IDs still need the Learn tab to map.',
     'mod.scanning': 'Scanning modules…', 'mod.progress': 'Probing address {i} of {n}…', 'mod.none': 'Not scanned yet. Tap Scan (engine ON or key ON).',
     'mod.only11': 'Module scan is for 11-bit CAN cars', 'mod.unknownEcu': 'Unknown module', 'mod.all': 'All', 'mod.scan': 'Scan',
+        'conn.slcan': 'USB-CAN (slcan / CANable)', 'conn.bitrate': 'CAN bitrate', 'conn.listen': 'Listen only (safer, cannot send)', 'slcan.noTraffic': 'No CAN traffic. Check the bitrate (250k/500k) and CAN-H/CAN-L wiring.',
         'win.noPorts': 'No COM port. Pair the ELM327 dongle in Windows Bluetooth settings first (it becomes a COM port), then try again.', 'win.scanningBle': 'Scanning for BLE devices…', 'win.opening': 'Opening {name}…',
         'dtc.generic': 'Generic code', 'dtc.maker': 'Manufacturer-specific code', 'dtc.sys.P': 'Powertrain (engine/transmission)',
     'dtc.sys.C': 'Chassis (ABS/steering)', 'dtc.sys.B': 'Body (airbag/lights/air-con)', 'dtc.sys.U': 'Network (CAN communication)'
@@ -325,6 +326,7 @@
     'mod.intro': 'Baca modul diagnostik yang menjawab di bas (OBD + UDS TesterPresent ke 7E0-7E7). Ini senaraikan enjin, TCU, ABS dan lain-lain yang guna alamat diagnostik standard; ID siaran masih perlu tab Belajar untuk dipetakan.',
     'mod.scanning': 'Mengimbas modul…', 'mod.progress': 'Menguji alamat {i} dari {n}…', 'mod.none': 'Belum diimbas. Tekan Imbas (enjin ON atau kunci ON).',
     'mod.only11': 'Imbas modul untuk kereta CAN 11-bit', 'mod.unknownEcu': 'Modul tidak dikenali', 'mod.all': 'Semua', 'mod.scan': 'Imbas',
+        'conn.slcan': 'USB-CAN (slcan / CANable)', 'conn.bitrate': 'Kadar bit CAN', 'conn.listen': 'Dengar sahaja (lebih selamat, tak boleh hantar)', 'slcan.noTraffic': 'Tiada trafik CAN. Semak kadar bit (250k/500k) dan pendawaian CAN-H/CAN-L.',
         'win.noPorts': 'Tiada port COM. Pair dongle ELM327 di Tetapan Bluetooth Windows dulu (ia jadi port COM), kemudian cuba lagi.', 'win.scanningBle': 'Mencari peranti BLE…', 'win.opening': 'Membuka {name}…',
         'act.saved': 'Disimpan: ID {id} bait {b} bit {bit} = {name}', 'act.active': 'AKTIF', 'act.inactive': 'tidak', 'act.detail': 'dari tindakan {n}%'
   };

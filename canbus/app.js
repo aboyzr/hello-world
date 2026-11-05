@@ -140,7 +140,9 @@ const SRC = s => t('src.' + s);
 
 // ---------- Sambungan ----------
 const ELECTRON = window.ElectronBridge && window.ElectronBridge.isElectron ? window.ElectronBridge : null;
+const Slcan = window.Slcan;
 if (!NATIVE && (WebBleTransport.available() || WebSerialTransport.available())) $('webBtns').hidden = false;
+if (!NATIVE && WebSerialTransport.available()) $('slcanBar').hidden = false;
 if (!NATIVE) { $('btnList').hidden = true; $('btnScanBle').hidden = true; }
 
 // Electron (Windows): proses utama hantar senarai port COM / peranti BLE; papar untuk dipilih
@@ -199,6 +201,7 @@ $('btnScanBle').onclick = () => listDevices(true);
 $('btnDemo').onclick = () => connect(new SimTransport());
 $('btnWebBle').onclick = () => connect(new WebBleTransport());
 $('btnSerial').onclick = () => connect(new WebSerialTransport());
+$('btnSlcan').onclick = () => connect(new WebSerialTransport(115200), null, 'slcan');
 $('btnDisconnect').onclick = () => disconnect();
 
 // Sambung semula automatik bila Bluetooth terputus, kemudian teruskan kerja yang sedang berjalan
@@ -214,7 +217,7 @@ async function onLost(msg) {
     for (let i = 1; i <= 3 && !elm; i++) {
       setStatus(t('conn.retry', { n: i }), true);
       await sleep(1500 * i);
-      await connect(lastConn.make(), lastConn.dev);
+      await connect(lastConn.make(), lastConn.dev, lastConn.driver);
     }
   } finally { reconnecting = false; }
   if (!elm) { setStatus(t('conn.retryFail'), true); return; }
@@ -225,9 +228,10 @@ async function onLost(msg) {
   else if (kind === 'sniff') $('btnSniff').click();
   else if (kind === 'graf') startGraf();
 }
-async function connect(tr, dev) {
+async function connect(tr, dev, driver) {
   if (busy) return;
-  lastConn = tr instanceof AndroidTransport ? { make: () => new AndroidTransport(dev), dev } : tr instanceof SimTransport ? { make: () => new SimTransport(), dev: null } : null;
+  driver = driver || 'elm';
+  lastConn = tr instanceof AndroidTransport ? { make: () => new AndroidTransport(dev), dev, driver } : tr instanceof SimTransport ? { make: () => new SimTransport(), dev: null, driver } : null;
   if (elm) await disconnect();
   busy = true;
   setStatus(t('conn.connecting', { name: tr.name === 'Demo (simulator)' ? t('conn.demo') : (tr.name || 'dongle') }));
@@ -235,9 +239,11 @@ async function connect(tr, dev) {
     await tr.open();
     transport = tr;
     tr.onClose(msg => { if (transport === tr) onLost(msg); });
-    elm = new Elm327(tr, logTerm);
+    elm = driver === 'slcan' ? new Slcan(tr, logTerm) : new Elm327(tr, logTerm);
     setStatus(t('conn.init'));
-    const info = await elm.init($('protoSel').value);
+    const info = driver === 'slcan'
+      ? await elm.init({ bitrate: $('slcanBit').value, listen: $('slcanListen').checked })
+      : await elm.init($('protoSel').value);
     if (dev) store.set('lastDev', dev);
     updatePill();
     supported = await elm.supportedPids().catch(() => []);
