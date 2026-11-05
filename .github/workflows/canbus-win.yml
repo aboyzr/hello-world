@@ -2,7 +2,7 @@ name: Bina Windows EXE Aboy Canbus
 
 on:
   push:
-    branches: [master, ccr-e10f1478-9pxy5o]
+    branches: [master, canbus-windows]
     paths: ['canbus/**', 'electron/**', '.github/workflows/canbus-win.yml']
   workflow_dispatch:
 
