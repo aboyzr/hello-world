@@ -4,6 +4,9 @@ on:
   push:
     branches: [master, canbus-windows]
     paths: ['canbus/**', 'electron/**', '.github/workflows/canbus-win.yml']
+  pull_request:
+    branches: [master]
+    paths: ['canbus/**', 'electron/**', '.github/workflows/canbus-win.yml']
   workflow_dispatch:
 
 permissions:
