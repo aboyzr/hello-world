@@ -298,11 +298,11 @@
 
   // ---------- Transport: Web Serial (PC: dongle Bluetooth Classic dipasang sebagai port COM) ----------
   class WebSerialTransport {
-    constructor() { this.dataFns = []; this.closeFns = []; this.name = 'Serial'; }
+    constructor(baud) { this.dataFns = []; this.closeFns = []; this.name = 'Serial'; this.baud = baud || 38400; }
     static available() { return !!(root.navigator && navigator.serial); }
     async open() {
       this.port = await navigator.serial.requestPort();
-      await this.port.open({ baudRate: 38400 });
+      await this.port.open({ baudRate: this.baud });
       this.writer = this.port.writable.getWriter();
       this.reader = this.port.readable.getReader();
       const dec = new TextDecoder();

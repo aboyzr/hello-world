@@ -11,6 +11,12 @@ Muat turun APK: https://github.com/aboyzr/hello-world/releases/download/canbus/A
 English (lalai) atau Bahasa Malaysia: tekan **EN / BM** di bahagian atas app. Pilihan disimpan, dan mesej
 Bluetooth dari Android turut ikut bahasa dipilih. Teks ada dalam `i18n.js`.
 
+## Adapter disokong
+- **Dongle ELM327** (Bluetooth Classic/BLE, atau COM): mod lalai.
+- **Adapter USB-to-CAN slcan/LAWICEL** (cth **CANable**, CANUSB, CANtact): tekan **USB-CAN (slcan)** di tab Sambung, pilih kadar bit (500k/250k) dan port COM. Memberi CAN mentah penuh dan laju. Ada pilihan **Dengar sahaja** untuk sniff lebih selamat.
+  - CANable mesti guna firmware **slcan** (muncul sebagai port COM). Firmware candleLight/gs_usb (USB natif) tidak disokong oleh Web Serial.
+  - PID, VIN dan imbas modul berfungsi melalui ISO-TP yang dibina atas CAN mentah.
+
 ## Tab
 | Tab | Fungsi |
 |---|---|
@@ -39,6 +45,7 @@ Bluetooth dari Android turut ikut bahasa dipilih. Teks ada dalam `i18n.js`.
 - `can-core.js`: huraian jawapan ELM327, ISO-TP, PID mod 01, DTC, VIN, bingkai CAN, ekstrak isyarat DBC
 - `analyze.js`: label standard & J1939, tekaan corak, korelasi dengan PID, pembelajaran tindakan
 - `dbc.js`: baca/tulis fail DBC
+- `slcan.js`: pemacu adapter USB-to-CAN slcan/LAWICEL (CANable) + ISO-TP
 - `elm327.js`: pemacu ELM327 + transport Android, Web Bluetooth, Web Serial, simulator
 - `app.js`, `index.html`, `app.css`: antara muka
 - `../android-canbus/`: projek Android (WebView + `ObdBluetooth.java` untuk Classic SPP dan BLE)
