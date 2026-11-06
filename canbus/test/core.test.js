@@ -87,3 +87,18 @@ test('pemacu ELM327 dengan simulator', async () => {
   assert.ok(frames.some(f => f.id === '316'));
   assert.ok((await elm.voltage()) > 12);
 });
+
+test('ECU standalone: init tak gagal walau OBD senyap, sniff masih jalan', async () => {
+  const { Elm327, SimTransport } = require('../elm327.js');
+  const elm = new Elm327(new SimTransport({ latency: 1, silentObd: true }));
+  const info = await elm.init('6');          // pengguna paksa CAN 11-bit 500k
+  assert.strictEqual(info.obd, false);
+  assert.ok(info.protocol.can);
+  assert.deepStrictEqual(info.ecus, []);
+  assert.strictEqual(await elm.readPid(0x0C), null);   // tiada OBD
+  const frames = [];
+  await elm.startMonitor(l => { const f = require('../can-core.js').parseCanFrame(l); if (f) frames.push(f.id); });
+  await new Promise(r => setTimeout(r, 250));
+  await elm.stopMonitor();
+  assert.ok(frames.includes('316'), 'sniff tetap menerima siaran CAN');
+});

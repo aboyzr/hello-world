@@ -246,19 +246,21 @@ async function connect(tr, dev, driver) {
       : await elm.init($('protoSel').value);
     if (dev) store.set('lastDev', dev);
     updatePill();
-    supported = await elm.supportedPids().catch(() => []);
-    const vin = await elm.readVin().catch(() => null);
+    const obd = info.obd !== false;   // ECU standalone: tiada jawapan OBD
+    supported = obd ? await elm.supportedPids().catch(() => []) : [];
+    const vin = obd ? await elm.readVin().catch(() => null) : null;
     const volt = await elm.voltage().catch(() => null);
     setStatus(t('conn.probing'));
     const probe = await elm.probeSniff().catch(e => ({ ok: false, reason: e.message }));
     sniffOk = probe.ok;
     setStatus('');
-    connInfo = { name: tr instanceof SimTransport ? null : tr.name, info, vin, volt, probe };
+    connInfo = { name: tr instanceof SimTransport ? null : tr.name, info, vin, volt, probe, obd };
     renderInfo();
     $('infoCard').hidden = false;
     $('btnDemoDbc').hidden = !(tr instanceof SimTransport);
     fillLearnPids();
-    toast(probe.ok ? t('conn.okSniff') : t('conn.okNoSniff'));
+    if (!obd) { toast(t('conn.standalone')); showTab('sniff'); }
+    else toast(probe.ok ? t('conn.okSniff') : t('conn.okNoSniff'));
   } catch (e) {
     setStatus(t('conn.failed', { msg: e.message }), true);
     await disconnect(true);
@@ -266,9 +268,10 @@ async function connect(tr, dev, driver) {
 }
 function renderInfo() {
   if (!connInfo) return;
-  const { name, info, vin, volt, probe } = connInfo;
+  const { name, info, vin, volt, probe, obd } = connInfo;
   $('infoList').innerHTML = [
     [t('info.dongle'), esc(name || t('conn.demo'))], [t('info.chip'), esc(info.version || '-')], [t('info.protocol'), esc(C.protocolName(info.protocol.id))],
+    [t('info.obd'), obd === false ? `<span class="bad">${esc(t('info.obdNo'))}</span>` : `<span class="ok">${esc(t('info.obdYes'))}</span>`],
     [t('info.ecus'), esc(info.ecus.join(', ') || '-')], ['VIN', esc(vin || t('info.notSupported'))],
     [t('info.battery'), volt ? volt.toFixed(1) + ' V' : '-'], [t('info.pids'), supported.length],
     [t('info.sniff'), probe.ok ? `<span class="ok">${esc(t('info.sniffOk', { n: probe.frames }))}</span>` : `<span class="bad">${esc(probe.reason)}</span>`]

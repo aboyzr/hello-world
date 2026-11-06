@@ -32,6 +32,9 @@ Bluetooth dari Android turut ikut bahasa dipilih. Teks ada dalam `i18n.js`.
 - Jika Bluetooth terputus semasa kerja, app cuba sambung semula 3 kali dan teruskan dari tempat berhenti.
 - Rakaman sniff terakhir disimpan, jadi CSV masih boleh dieksport selepas app dibuka semula.
 
+## ECU standalone (MyEFI, Haltech, Link, dll.)
+ECU standalone selalu tak menjawab OBD, cuma menyiar CAN sendiri. Dengan dongle ELM327: pilih protokol CAN tertentu (cth CAN 11-bit 500k) di tab Sambung, kemudian sambung — app tak lagi gagal walau OBD senyap, dan terus buka tab Sniff. Lebih baik guna adapter USB-CAN (CANable) dengan kadar bit yang betul. Masukkan peta CAN dari manual ECU di Kenal ID atau import DBC.
+
 ## Had yang perlu tahu
 - Imbas modul hanya kesan modul yang guna alamat diagnostik standard (7E0–7EF). ID siaran (broadcast) biasa tidak menyatakan modul asalnya, jadi untuk petakan ID siaran ke TCU/ABS/BCM, guna tab Belajar (tindakan) atau cabut modul dan lihat ID mana hilang. Hanya CAN 11-bit.
 - ID CAN mentah ditetapkan pengeluar dan tiada senarai rasmi. Label **Tekaan** hanya petunjuk; sahkan dengan tab Belajar.

@@ -66,8 +66,17 @@
       const dpn = Core.cleanLines(await this.send('ATDPN')).join('');
       this.protocol = Core.protocolInfo(dpn);
       const parsed = Core.parseResponse(first, this.protocol);
-      if (parsed.error) throw new Error(tr('elm.carSilent', 'Kereta tidak menjawab ({err}). Pastikan suis kunci ON.', { err: parsed.error }));
-      return { version: this.version, protocol: this.protocol, ecus: [...new Set(parsed.messages.map(m => m.ecu))] };
+      if (!parsed.error) {
+        this.obd = true;
+        return { version: this.version, protocol: this.protocol, ecus: [...new Set(parsed.messages.map(m => m.ecu))], obd: true };
+      }
+      // Tiada jawapan OBD (cth ECU standalone yang hanya menyiar CAN).
+      // Jika pengguna paksa protokol CAN, guna ia untuk sniff; jika tidak, beritahu.
+      this.obd = false;
+      const forced = Core.protocolInfo(protocol || '0');
+      if (forced.can) this.protocol = forced;            // guna bitrate yang dipaksa
+      if (this.protocol.can) return { version: this.version, protocol: this.protocol, ecus: [], obd: false };
+      throw new Error(tr('elm.noObdPickCan', 'Kereta tidak menjawab OBD (mungkin ECU standalone). Pilih protokol CAN tertentu (cth CAN 11-bit 500k) di bawah, kemudian sambung semula untuk guna Sniff.'));
     }
 
     async query(cmd, timeout) {
@@ -323,7 +332,7 @@
   class SimTransport {
     constructor(opts) {
       this.name = 'Demo (simulator)'; this.dataFns = []; this.closeFns = [];
-      this.o = Object.assign({ dtcs: ['P0301', 'P0420'], vin: 'PM2L9K1A0MS123456', latency: 15 }, opts);
+      this.o = Object.assign({ dtcs: ['P0301', 'P0420'], vin: 'PM2L9K1A0MS123456', latency: 15, silentObd: false }, opts);
       this.echo = true; this.headers = false; this.spaces = true; this.caf = true;
       this.t0 = Date.now(); this.mon = null; this.dtcs = this.o.dtcs.slice(); this.n = 0;
       this.brake = null; // null = automatik; true/false = dikawal app (mod Belajar tindakan)
@@ -390,6 +399,7 @@
         if (this.txHeader) { this.lastTx = { id: (this.txPrio || '') + this.txHeader, data: c }; return 'NO DATA'; }
         return 'NO DATA';
       }
+      if (this.o.silentObd && /^(01|03|07|09|04)/.test(c)) return 'NO DATA';
       const s = this._state(); const mode = c.slice(0, 2), pid = parseInt(c.slice(2, 4), 16);
       const w16 = v => [(Math.round(v) >> 8) & 0xff, Math.round(v) & 0xff];
       if (c === '3E00') {
