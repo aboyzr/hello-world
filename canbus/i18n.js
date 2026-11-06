@@ -29,7 +29,7 @@
     'conn.okNoSniff': 'Connected. Sniff is not available, but PID graphs work.',
     'conn.failed': 'Failed: {msg}', 'conn.lost': 'Connection lost', 'conn.lostMsg': 'Disconnected: {msg}',
     'info.dongle': 'Dongle', 'info.chip': 'Chip', 'info.protocol': 'Protocol', 'info.ecus': 'ECUs answering', 'info.notSupported': 'Not supported',
-    'info.battery': 'Battery voltage', 'info.pids': 'Supported PIDs', 'info.sniff': 'Sniff mode (ATMA)', 'info.sniffOk': 'Supported · {n} frames in 0.8 s',
+    'info.battery': 'Battery voltage', 'info.pids': 'Supported PIDs', 'info.obd': 'Standard OBD', 'info.obdYes': 'Answered', 'info.obdNo': 'No answer (standalone ECU — use Sniff)', 'conn.standalone': 'ECU did not answer OBD (standalone). Use the Sniff tab to read the CAN broadcast.', 'elm.noObdPickCan': 'Car did not answer OBD (likely a standalone ECU). Pick a specific CAN protocol (e.g. CAN 11-bit 500k) below, then reconnect to use Sniff.', 'info.sniff': 'Sniff mode (ATMA)', 'info.sniffOk': 'Supported · {n} frames in 0.8 s',
     'term.title': 'Terminal (AT / OBD commands)', 'term.ph': 'e.g. ATDP, 010C', 'term.send': 'Send',
     // mesej
     'msg.needConn': 'Connect to a dongle first (or tap Demo)', 'msg.notCan': 'This car does not use CAN. Only PID graphs are available.',
@@ -214,7 +214,7 @@
     'conn.okNoSniff': 'Bersambung. Sniff tidak tersedia, tapi graf PID boleh.',
     'conn.failed': 'Gagal: {msg}', 'conn.lost': 'Sambungan terputus', 'conn.lostMsg': 'Terputus: {msg}',
     'info.dongle': 'Dongle', 'info.chip': 'Cip', 'info.protocol': 'Protokol', 'info.ecus': 'ECU menjawab', 'info.notSupported': 'Tidak disokong',
-    'info.battery': 'Voltan bateri', 'info.pids': 'PID disokong', 'info.sniff': 'Mod sniff (ATMA)', 'info.sniffOk': 'Disokong · {n} bingkai dalam 0.8 s',
+    'info.battery': 'Voltan bateri', 'info.pids': 'PID disokong', 'info.obd': 'OBD standard', 'info.obdYes': 'Dijawab', 'info.obdNo': 'Tidak dijawab (ECU standalone — guna Sniff)', 'conn.standalone': 'ECU tak jawab OBD (standalone). Guna tab Sniff untuk baca siaran CAN.', 'info.sniff': 'Mod sniff (ATMA)', 'info.sniffOk': 'Disokong · {n} bingkai dalam 0.8 s',
     'term.title': 'Terminal (arahan AT / OBD)', 'term.ph': 'cth ATDP, 010C', 'term.send': 'Hantar',
     'msg.needConn': 'Sambung ke dongle dulu (atau tekan Demo)', 'msg.notCan': 'Kereta ini bukan protokol CAN. Hanya graf PID boleh.',
     'msg.bufferFull': 'BUFFER FULL: terlalu banyak trafik. Guna tapis ID.', 'msg.noAtma': 'Dongle tidak sokong ATMA',
