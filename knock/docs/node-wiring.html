@@ -1,0 +1,211 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+body{margin:0;background:#fff;font-family:Arial,Helvetica,sans-serif}
+svg text{font-family:Arial,Helvetica,sans-serif}
+</style></head><body>
+<svg id="s" xmlns="http://www.w3.org/2000/svg" width="1560" height="1000" viewBox="0 0 1560 1000"></svg>
+<script>
+const S = document.getElementById('s');
+const NS = 'http://www.w3.org/2000/svg';
+function el(tag, a, txt) { const e = document.createElementNS(NS, tag); for (const k in a) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; S.appendChild(e); return e; }
+const W = '#222', SIG = '#1565c0', PWR = '#c62828', V33 = '#e67e00', CANC = '#2e7d32', ANA = '#6a1b9a';
+function wire(pts, c = W, w = 2) { el('polyline', { points: pts.map(p => p.join(',')).join(' '), fill: 'none', stroke: c, 'stroke-width': w, 'stroke-linejoin': 'round' }); }
+function dot(x, y, c = W) { el('circle', { cx: x, cy: y, r: 4, fill: c }); }
+function t(x, y, s, o = {}) { return el('text', Object.assign({ x, y, 'font-size': 13, fill: '#222', 'dominant-baseline': 'middle' }, o), s); }
+function box(x, y, w, h, title, sub, fill = '#f4f6fb') {
+  el('rect', { x, y, width: w, height: h, rx: 8, fill, stroke: '#333', 'stroke-width': 2 });
+  t(x + w / 2, y + 18, title, { 'text-anchor': 'middle', 'font-weight': 'bold', 'font-size': 15 });
+  if (sub) t(x + w / 2, y + 36, sub, { 'text-anchor': 'middle', 'font-size': 12, fill: '#555' });
+}
+function pin(x, y, name, side, c = W) {  // nama pin di dalam kotak
+  t(side === 'L' ? x + 8 : x - 8, y, name, { 'text-anchor': side === 'L' ? 'start' : 'end', 'font-size': 13, fill: c, 'font-weight': 'bold' });
+}
+function res(x1, y1, x2, y2, label, c = W, lo = {}) {
+  const h = y1 === y2, mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+  if (h) { wire([[x1, y1], [mx - 20, y1]], c); wire([[mx + 20, y1], [x2, y2]], c); el('rect', { x: mx - 20, y: my - 7, width: 40, height: 14, fill: '#fff', stroke: c, 'stroke-width': 2 }); t(mx, my - 17 + (lo.dy || 0), label, { 'text-anchor': 'middle', 'font-size': 12 }); }
+  else { wire([[x1, y1], [x1, my - 20]], c); wire([[x1, my + 20], [x2, y2]], c); el('rect', { x: mx - 7, y: my - 20, width: 14, height: 40, fill: '#fff', stroke: c, 'stroke-width': 2 }); t(mx + 12 + (lo.dx || 0), my, label, { 'font-size': 12, 'text-anchor': lo.anchor || 'start' }); }
+}
+function cap(x1, y1, x2, y2, label, c = W, lo = {}) {
+  const h = y1 === y2, mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+  if (h) { wire([[x1, y1], [mx - 4, y1]], c); wire([[mx + 4, y1], [x2, y2]], c); el('line', { x1: mx - 4, y1: my - 12, x2: mx - 4, y2: my + 12, stroke: c, 'stroke-width': 3 }); el('line', { x1: mx + 4, y1: my - 12, x2: mx + 4, y2: my + 12, stroke: c, 'stroke-width': 3 }); t(mx, my - 22, label, { 'text-anchor': 'middle', 'font-size': 12 }); }
+  else { wire([[x1, y1], [x1, my - 4]], c); wire([[x1, my + 4], [x2, y2]], c); el('line', { x1: mx - 12, y1: my - 4, x2: mx + 12, y2: my - 4, stroke: c, 'stroke-width': 3 }); el('line', { x1: mx - 12, y1: my + 4, x2: mx + 12, y2: my + 4, stroke: c, 'stroke-width': 3 }); t(mx + 18 + (lo.dx || 0), my, label, { 'font-size': 12, 'text-anchor': lo.anchor || 'start' }); }
+}
+// diod: anod (x1,y1) -> katod (x2,y2)
+function diode(x1, y1, x2, y2, label, c = W, lo = {}) {
+  const h = y1 === y2, mx = (x1 + x2) / 2, my = (y1 + y2) / 2, d = Math.sign(h ? x2 - x1 : y2 - y1);
+  if (h) { wire([[x1, y1], [mx - 10 * d, y1]], c); wire([[mx + 10 * d, y1], [x2, y2]], c); el('polygon', { points: `${mx - 10 * d},${my - 10} ${mx - 10 * d},${my + 10} ${mx + 10 * d},${my}`, fill: c }); el('line', { x1: mx + 10 * d, y1: my - 10, x2: mx + 10 * d, y2: my + 10, stroke: c, 'stroke-width': 3 }); t(mx, my - 20, label, { 'text-anchor': 'middle', 'font-size': 12 }); }
+  else { wire([[x1, y1], [x1, my - 10 * d]], c); wire([[x1, my + 10 * d], [x2, y2]], c); el('polygon', { points: `${mx - 10},${my - 10 * d} ${mx + 10},${my - 10 * d} ${mx},${my + 10 * d}`, fill: c }); el('line', { x1: mx - 10, y1: my + 10 * d, x2: mx + 10, y2: my + 10 * d, stroke: c, 'stroke-width': 3 }); t(mx + (lo.dx != null ? lo.dx : 16), my, label, { 'font-size': 12, 'text-anchor': lo.anchor || 'start' }); }
+}
+function gnd(x, y, c = W) { wire([[x, y], [x, y + 10]], c); [[14, 10], [9, 15], [4, 20]].forEach(([w, dy]) => el('line', { x1: x - w, y1: y + dy, x2: x + w, y2: y + dy, stroke: c, 'stroke-width': 2 })); }
+function flag(x, y, s, c, anchor = 'middle') {
+  const w = s.length * 8 + 12, x0 = anchor === 'middle' ? x - w / 2 : anchor === 'end' ? x - w : x;
+  el('rect', { x: x0, y: y - 11, width: w, height: 22, rx: 11, fill: c }); t(x0 + w / 2, y + 1, s, { 'text-anchor': 'middle', fill: '#fff', 'font-weight': 'bold', 'font-size': 12 });
+}
+
+// ---------- Tajuk ----------
+t(30, 28, 'Litar pendawaian modul sensor knock (ESP32-C3 + TPIC8101 / HIP9011)', { 'font-size': 22, 'font-weight': 'bold' });
+t(30, 52, 'Pin ESP32 ikut knock/node/src/main.cpp.  Nama pin cip ikut datasheet HIP9011; semak nombor pin pada datasheet cip yang anda beli.', { 'font-size': 13, fill: '#555' });
+
+// ---------- Bekalan kuasa ----------
+el('rect', { x: 20, y: 75, width: 470, height: 135, rx: 10, fill: '#fff5f5', stroke: '#e0b4b4', 'stroke-dasharray': '6 4' });
+t(32, 92, 'BEKALAN KUASA', { 'font-weight': 'bold', fill: PWR });
+t(30, 140, '12V IGN', { 'font-weight': 'bold' });
+wire([[90, 140], [110, 140]], PWR);
+diode(110, 140, 170, 140, 'SS34', PWR);
+dot(195, 140, PWR); wire([[170, 140], [290, 140]], PWR);
+diode(195, 180, 195, 140, '', PWR); t(208, 172, 'TVS 24V', { 'font-size': 12 }); gnd(195, 180);
+box(290, 110, 120, 60, 'Buck', '12V → 5V', '#fff');
+wire([[410, 140], [440, 140]], PWR); flag(462, 140, '+5V', PWR);
+wire([[350, 170], [350, 182]]); gnd(350, 182);
+t(232, 112, 'fius 1A', { 'font-size': 11, fill: '#777' });
+
+// ---------- ESP32-C3 ----------
+const EX = 560, EY = 170, EW = 200, EH = 520;
+box(EX, EY, EW, EH, 'ESP32-C3', 'SuperMini', '#eef4ff');
+const L = { '5V': 220, 'GND': 260, '3V3': 300, 'GPIO5': 430, 'GPIO10': 600 };
+const R = { 'GPIO4': 220, 'GPIO6': 260, 'GPIO7': 300, 'GPIO21': 340, 'GPIO3': 450, 'GPIO0': 600, 'GPIO1': 640 };
+for (const k in L) pin(EX, L[k], k, 'L');
+for (const k in R) pin(EX + EW, R[k], k + (k === 'GPIO3' ? ' (ADC)' : ''), 'R');
+t(EX + EW / 2, 520, 'LED GPIO8 (on-board)', { 'text-anchor': 'middle', 'font-size': 12, fill: '#555' });
+t(EX + EW / 2, 538, 'nyala = sync, kelip = tacho', { 'text-anchor': 'middle', 'font-size': 12, fill: '#555' });
+wire([[EX, 220], [530, 220]], PWR); flag(508, 220, '+5V', PWR);
+wire([[EX, 260], [535, 260], [535, 268]]); gnd(535, 268);
+wire([[EX, 300], [530, 300]], V33); flag(506, 300, '3V3', V33);
+
+// ---------- Input tacho ----------
+el('rect', { x: 20, y: 330, width: 470, height: 180, rx: 10, fill: '#f5f9ff', stroke: '#b4c8e0', 'stroke-dasharray': '6 4' });
+t(32, 347, 'INPUT TACHO (1 pulse setiap pembakaran)', { 'font-weight': 'bold', fill: SIG });
+t(30, 400, 'Tacho out', { 'font-weight': 'bold' }); t(30, 416, 'MyEFI', { 'font-weight': 'bold' });
+res(100, 400, 200, 400, '1k');
+box(200, 375, 130, 95, 'PC817', '', '#fff');
+t(212, 400, 'A', { 'font-weight': 'bold', 'font-size': 12 }); t(212, 445, 'K', { 'font-weight': 'bold', 'font-size': 12 });
+t(318, 400, 'C', { 'font-weight': 'bold', 'font-size': 12, 'text-anchor': 'end' }); t(318, 445, 'E', { 'font-weight': 'bold', 'font-size': 12, 'text-anchor': 'end' });
+diode(255, 412, 255, 455, '', '#999', {}); t(265, 434, 'LED', { 'font-size': 10, fill: '#999' });
+wire([[200, 445], [170, 445], [170, 460]]); gnd(170, 460); t(130, 492, 'GND ECU', { 'font-size': 11, fill: '#555' });
+wire([[330, 400], [450, 400], [450, 430], [EX, 430]], SIG); dot(450, 400, SIG);
+res(450, 400, 450, 350, '10k', V33, { dx: 0 }); flag(450, 350, '3V3', V33);
+wire([[330, 445], [380, 445], [380, 460]]); gnd(380, 460);
+
+// ---------- Input silinder 1 ----------
+el('rect', { x: 20, y: 530, width: 470, height: 230, rx: 10, fill: '#f8f5ff', stroke: '#cbb8e0', 'stroke-dasharray': '6 4' });
+t(32, 547, 'SYNC SILINDER 1', { 'font-weight': 'bold', fill: ANA });
+el('rect', { x: 32, y: 595, width: 52, height: 50, rx: 6, fill: '#fff', stroke: '#333', 'stroke-width': 2 });
+for (let i = 0; i < 3; i++) el('path', { d: `M ${40 + i * 12} 620 a 6 6 0 0 1 12 0`, fill: 'none', stroke: '#333', 'stroke-width': 2 });
+t(58, 568, 'Klip induktif', { 'text-anchor': 'middle', 'font-size': 12 }); t(58, 583, 'wayar plug 1', { 'text-anchor': 'middle', 'font-size': 12 });
+wire([[84, 605], [100, 605], [100, 620]]);
+res(100, 620, 175, 620, '10k');
+wire([[84, 638], [92, 638], [92, 700]]); gnd(92, 700);
+dot(175, 620); diode(175, 700, 175, 620, '', W); t(150, 690, '1N4148', { 'font-size': 11, 'text-anchor': 'end' }); gnd(175, 700);
+wire([[175, 620], [205, 620]]); dot(205, 620); res(205, 620, 205, 700, '100k', W, { dx: -2 }); gnd(205, 700);
+wire([[205, 620], [252, 620]]);
+// NPN
+el('circle', { cx: 272, cy: 620, r: 24, fill: '#fff', stroke: '#333', 'stroke-width': 2 });
+el('line', { x1: 260, y1: 605, x2: 260, y2: 635, stroke: '#333', 'stroke-width': 3 });
+wire([[252, 620], [260, 620]]);
+wire([[260, 612], [280, 598], [280, 580]]);
+wire([[260, 628], [280, 642], [280, 700]]);
+el('polygon', { points: '280,642 270,642 276,634', fill: '#333' });
+t(305, 620, '2N3904', { 'font-size': 12 }); gnd(280, 700);
+wire([[280, 580], [450, 580], [450, 600], [EX, 600]], ANA); dot(450, 580, ANA);
+res(450, 580, 450, 525, '', V33); flag(450, 525, '3V3', V33); t(462, 552, '10k', { 'font-size': 12 });
+t(300, 742, 'COP: ganti dengan PC817 pada trigger coil 1, set CYL1_EDGE = RISING', { 'font-size': 11, fill: '#555', 'text-anchor': 'middle' });
+
+// ---------- 74HCT125 ----------
+const HX = 880, HY = 180, HW = 130, HH = 210;
+box(HX, HY, HW, HH, '74HCT125', 'kuasa 5V', '#fffaf0');
+['1A', '2A', '3A', '4A'].forEach((n, i) => pin(HX, 220 + i * 40, n, 'L'));
+['1Y', '2Y', '3Y', '4Y'].forEach((n, i) => pin(HX + HW, 220 + i * 40, n, 'R'));
+t(HX + HW / 2, 375, 'OE1..4 → GND', { 'text-anchor': 'middle', 'font-size': 11, fill: '#555' });
+wire([[HX + 40, HY], [HX + 40, HY - 25]], PWR); flag(HX + 40, HY - 36, '+5V', PWR); t(HX + 48, HY - 12, 'VCC', { 'font-size': 11 });
+wire([[HX + 95, HY + HH], [HX + 95, HY + HH + 12]]); gnd(HX + 95, HY + HH + 12);
+[['GPIO4', 'SCK'], ['GPIO6', 'SI'], ['GPIO7', 'CS'], ['GPIO21', 'INT/HOLD']].forEach(([g], i) => {
+  const y = 220 + i * 40; wire([[EX + EW, y], [HX, y]], SIG);
+});
+
+// ---------- Cip knock ----------
+const TX = 1120, TY = 180, TW = 200, TH = 460;
+box(TX, TY, TW, TH, 'TPIC8101 / HIP9011', 'cip knock, 5V', '#f0fff4');
+['SCK', 'SI', 'CS', 'INT/HOLD'].forEach((n, i) => { const y = 220 + i * 40; pin(TX, y, n, 'L'); wire([[HX + HW, y], [TX, y]], SIG); });
+pin(TX, 400, 'SO  (tak sambung)', 'L', '#999');
+pin(TX, 450, 'INTOUT', 'L');
+pin(TX + TW, 230, 'CH0IN', 'R'); pin(TX + TW, 290, 'CH0FB', 'R');
+pin(TX + TW, 450, 'CH1IN', 'R'); pin(TX + TW, 510, 'CH1FB', 'R');
+pin(TX + TW, 590, 'VMID', 'R');
+t(TX + TW / 2, 545, 'CH0NI, CH1NI → VMID', { 'text-anchor': 'middle', 'font-size': 11, fill: '#555' });
+t(TX + TW / 2, 562, 'TEST → +5V', { 'text-anchor': 'middle', 'font-size': 11, fill: '#555' });
+wire([[TX + 50, TY], [TX + 50, TY - 25]], PWR); flag(TX + 50, TY - 36, '+5V', PWR); t(TX + 58, TY - 12, 'VDD', { 'font-size': 11 });
+wire([[TX + 150, TY], [TX + 150, TY - 14]]); t(TX + 158, TY - 8, 'GND', { 'font-size': 11 });
+el('line', { x1: TX + 140, y1: TY - 14, x2: TX + 160, y2: TY - 14, stroke: W, 'stroke-width': 2 });
+// VMID kapasitor
+wire([[TX + TW, 590], [1350, 590]]); cap(1350, 590, 1350, 640, '22nF'); gnd(1350, 640);
+// Kristal
+t(TX + TW / 2, 618, 'OSCIN        OSCOUT', { 'text-anchor': 'middle', 'font-size': 12, 'font-weight': 'bold' });
+wire([[1170, TY + TH], [1170, 720]]); wire([[1270, TY + TH], [1270, 720]]);
+dot(1170, 680); dot(1270, 680); res(1170, 680, 1270, 680, '1MΩ');
+dot(1170, 720); dot(1270, 720);
+wire([[1170, 720], [1205, 720]]); wire([[1235, 720], [1270, 720]]);
+el('line', { x1: 1205, y1: 708, x2: 1205, y2: 732, stroke: W, 'stroke-width': 3 }); el('line', { x1: 1235, y1: 708, x2: 1235, y2: 732, stroke: W, 'stroke-width': 3 });
+el('rect', { x: 1211, y: 706, width: 18, height: 28, fill: '#fff', stroke: W, 'stroke-width': 2 }); t(1220, 748, '4 MHz', { 'text-anchor': 'middle', 'font-size': 12 });
+cap(1170, 720, 1170, 780, '20pF', W, { dx: -36, anchor: 'end' }); gnd(1170, 780);
+cap(1270, 720, 1270, 780, '20pF'); gnd(1270, 780);
+// pin OSCIN label clean-up: replace earlier stray pin label
+// ---------- Sensor ----------
+function sensor(yIn, yFb, name, desc) {
+  const n = 1350;
+  wire([[TX + TW, yIn], [n, yIn]], ANA); dot(n, yIn, ANA);
+  res(n, yIn, n, yFb, '47k', ANA, { dx: -2 }); wire([[n, yFb], [TX + TW, yFb]], ANA);
+  t(n + 14, (yIn + yFb) / 2 + 16, '(RF)', { 'font-size': 11, fill: '#777' });
+  res(n, yIn, 1430, yIn, '47k', ANA);
+  cap(1430, yIn, 1475, yIn, '3.3nF', ANA);
+  el('circle', { cx: 1505, cy: yIn + 20, r: 24, fill: '#fff', stroke: ANA, 'stroke-width': 2 });
+  t(1505, yIn + 21, name, { 'text-anchor': 'middle', 'font-weight': 'bold', fill: ANA });
+  wire([[1475, yIn], [1505, yIn], [1505, yIn - 4]], ANA);
+  wire([[1505, yIn + 44], [1505, yIn + 54]]); gnd(1505, yIn + 54);
+  t(1545, yIn - 48, desc, { 'text-anchor': 'end', 'font-size': 12, fill: '#444' });
+}
+sensor(230, 290, 'S1', 'Sensor knock DEPAN');
+sensor(450, 510, 'S2', 'Sensor knock BELAKANG');
+
+// ---------- INTOUT -> ADC ----------
+wire([[TX, 450], [1080, 450]], ANA);
+res(1080, 450, 980, 450, '10k', ANA, { dy: 34 });
+dot(960, 450, ANA); wire([[980, 450], [EX + EW, 450]], ANA);
+res(960, 450, 960, 530, '10k', ANA, { dx: 0 }); gnd(960, 530);
+t(870, 470, '0–5V → 0–2.5V', { 'font-size': 11, fill: '#555', 'text-anchor': 'middle' });
+
+// ---------- CAN ----------
+const CX = 830, CY = 580, CW = 210, CH = 110;
+box(CX, CY, CW, CH, 'SN65HVD230', 'transceiver CAN', '#f2fbf2');
+pin(CX, 600 + 15, 'D', 'L'); pin(CX, 640 + 15, 'R', 'L');
+pin(CX + CW, 615, 'CANH', 'R'); pin(CX + CW, 655, 'CANL', 'R');
+wire([[EX + EW, 600], [800, 600], [800, 615], [CX, 615]], CANC);
+wire([[EX + EW, 640], [790, 640], [790, 655], [CX, 655]], CANC);
+t(800, 590, 'TX', { 'font-size': 11, fill: CANC }); t(780, 668, 'RX', { 'font-size': 11, fill: CANC });
+wire([[CX + 50, CY + CH], [CX + 50, CY + CH + 25]], V33); flag(CX + 50, CY + CH + 36, '3V3', V33);
+wire([[CX + 150, CY + CH], [CX + 150, CY + CH + 14]]); gnd(CX + 150, CY + CH + 14);
+t(CX + 105, CY + CH - 12, 'Rs → GND', { 'text-anchor': 'middle', 'font-size': 11, fill: '#555' });
+wire([[CX + CW, 615], [1085, 615], [1085, 840], [1110, 840]], CANC, 3);
+wire([[CX + CW, 655], [1068, 655], [1068, 862], [1110, 862]], CANC, 3);
+t(1116, 840, 'CAN-H', { 'font-weight': 'bold', fill: CANC }); t(1116, 862, 'CAN-L', { 'font-weight': 'bold', fill: CANC });
+t(1175, 851, '→ bas CAN MyEFI + skrin Waveshare (500 kbps)', { 'font-size': 13 });
+t(1116, 884, '120Ω hanya di dua hujung bas', { 'font-size': 12, fill: '#555' });
+
+// ---------- Nota ----------
+el('rect', { x: 20, y: 790, width: 760, height: 190, rx: 10, fill: '#fffbe6', stroke: '#e6d38a' });
+t(34, 810, 'NOTA PENTING', { 'font-weight': 'bold', fill: '#8a6d00' });
+const notes = [
+  '1. Cip knock ialah 5V: isyarat dari ESP32 (3.3V) mesti melalui 74HCT125 (HCT, bukan HC).',
+  '2. INTOUT boleh sampai ~4.9V: wajib pembahagi 10k/10k sebelum GPIO3.',
+  '3. Tacho jenis open-collector: sambung 12V → 2.2k → A PC817, dan K → tacho out.',
+  '4. Satukan GND node, GND ECU dan GND blok enjin pada satu titik (elak ground loop).',
+  '5. Wayar sensor guna kabel berperisai (shield ke GND di hujung node sahaja), jauhkan dari wayar plug.',
+  '6. Sensor dibolt terus ke blok (~20 Nm). Satu sensor sahaja? Biarkan CH1 tak bersambung, set "1 sensor".',
+  '7. Kuasa dari 12V IGN (bukan terus bateri) supaya modul mati bila kunci dimatikan.'
+];
+notes.forEach((n, i) => t(34, 836 + i * 21, n, { 'font-size': 13 }));
+
+// Legenda
+const lg = [[PWR, '+5V'], [V33, '3V3'], [SIG, 'isyarat digital'], [ANA, 'analog / sensor'], [CANC, 'CAN']];
+lg.forEach(([c, s], i) => { const x = 1116 + (i % 3) * 140, y = 930 + Math.floor(i / 3) * 24; wire([[x, y], [x + 30, y]], c, 3); t(x + 38, y, s, { 'font-size': 12 }); });
+</script></body></html>

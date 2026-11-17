@@ -54,6 +54,8 @@ Kalau enjin **wasted spark** dan klip dipasang pada wayar plug 1, pulse datang s
 
 ## Pendawaian node (ESP32-C3)
 
+![Litar pendawaian node](docs/node-wiring.png)
+
 | ESP32-C3 | Ke |
 |---|---|
 | GPIO0 | SN65HVD230 D (TX) |
