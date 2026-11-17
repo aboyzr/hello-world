@@ -39,6 +39,8 @@ Kalau enjin **wasted spark** dan klip dipasang pada wayar plug 1, pulse datang s
 
 ## Senarai komponen
 
+Senarai penuh dengan anggaran harga: [BOM.md](BOM.md)
+
 | Komponen | Nota |
 |---|---|
 | Waveshare ESP32-S3-Touch-LCD-4.3 | Skrin 800×480, sentuh, CAN on-board |
