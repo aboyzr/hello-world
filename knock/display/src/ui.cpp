@@ -103,7 +103,7 @@ static void drawLive() {
   int n = app.slots();
   float th = p.threshold10 / 10.0f;
   const float SCALE = 4.0f;  // bar penuh = 4x paras latar
-  int x0 = 20, x1 = 780, yTop = TOP_H + 50, yBot = TAB_Y - 70;
+  int x0 = 20, x1 = 780, yTop = TOP_H + 66, yBot = TAB_Y - 70;
   int colW = (x1 - x0) / n;
   int barW = colW * 6 / 10;
   if (barW > 140) barW = 140;
@@ -116,11 +116,7 @@ static void drawLive() {
   snprintf(s, sizeof(s), "Nisbah ke paras latar   ambang %.1fx   jumlah knock %lu", th, (unsigned long)app.knock.totalKnock);
   fb.drawString(s, 20, TOP_H + 12);
   fb.setFont(&fonts::FreeSansBold9pt7b);
-  button(680, TOP_H + 6, 110, 34, "RESET", B_RESET);
-
-  // garisan ambang
-  int yt = yOf(th);
-  for (int x = x0; x < x1; x += 12) fb.drawFastHLine(x, yt, 6, C_KNOCK);
+  button(680, TOP_H + 4, 110, 32, "RESET", B_RESET);
 
   Profile pp = p;
   for (int i = 0; i < n; i++) {
@@ -151,6 +147,10 @@ static void drawLive() {
     snprintf(s, sizeof(s), "%lux  S%d  %umV", (unsigned long)c.count, ch + 1, c.lastMv);
     fb.drawString(s, cx, ly + 48);
   }
+  // garisan ambang (dilukis atas bar)
+  int yt = yOf(th);
+  for (int x = x0; x < x1; x += 12) fb.fillRect(x, yt - 1, 6, 2, C_KNOCK);
+
   const CylState &ns = app.knock.s[KnockEngine::SLOT_NOSYNC];
   if (ns.samples) {
     fb.setTextDatum(textdatum_t::top_left);

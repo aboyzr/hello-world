@@ -2,6 +2,16 @@
 
 Alat diagnostik untuk tuner: kesan knock dan tunjuk **silinder mana** yang knock, pada RPM dan MAP berapa. Satu alat boleh dipakai pada banyak enjin (3, 4, 5, 6 dan 8 silinder), dengan profil yang disimpan untuk setiap enjin.
 
+## Gambaran skrin
+
+| LIVE | PETA |
+|---|---|
+| ![LIVE](docs/1-live.png) | ![PETA](docs/2-peta.png) |
+| **LOG** | **TETAPAN** |
+| ![LOG](docs/3-log.png) | ![TETAPAN](docs/5-tetapan.png) |
+
+Tab **CAN** ([gambar](docs/4-can.png)) menyenaraikan ID CAN yang dilihat untuk cari ID MyEFI. Gambar ni mockup dengan data contoh.
+
 ## Seni bina
 
 ```
